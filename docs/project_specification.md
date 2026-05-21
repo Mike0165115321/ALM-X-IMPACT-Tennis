@@ -161,7 +161,7 @@ ALM-X-IMPACT-Tennis/ (Root)
 
 ## 🗃️ หัวข้อที่ 4: Database Schema Rough Draft (ร่างตารางฐานข้อมูลคร่าวๆ)
 
-ระบบจองคิวสนามเทนนิสและระบบจับคู่ใช้งาน **MongoDB** ซึ่งเป็นแบบ Document Schema ด้านล่างนี้คือแบบร่างโครงสร้างของคอลเลกชัน (Collections) หลักและรูปแบบความสัมพันธ์
+ระบบจองคิวสนามเทนนิสและระบบจับคู่ใช้งาน **MongoDB** ซึ่งเป็นแบบ Document Schema ด้านล่างนี้คือแบบร่างโครงสร้างของคอลเลกชัน (Collections) หลักที่ปรับปรุงให้สอดรับกับฟีเจอร์ใน `core feature.md` แล้ว
 
 ### 👥 1. Users Collection
 ```json
@@ -169,12 +169,17 @@ ALM-X-IMPACT-Tennis/ (Root)
   "_id": "ObjectId",
   "username": "string",
   "email": "string",
-  "password_hash": "string",
+  "password_hash": "string", // ค่าว่างได้หากสมัครผ่าน Google Auth
+  "google_id": "string", // เก็บ ID จาก Google SSO
   "role": "string", // "player", "admin", "court_owner"
   "profile": {
     "display_name": "string",
     "phone": "string",
-    "skill_level": "string" // "Beginner", "Intermediate", "Advanced"
+    "is_phone_verified": "boolean", // สถานะการยืนยันตัวตนด้วย OTP
+    "ntrp_rating": "number", // ระดับฝีมือเทนนิส 1.5 - 7.0 (NTRP)
+    "wtn_rating": "number", // ระดับฝีมือเทนนิส 40 - 1 (WTN)
+    "playing_style": "string", // "Aggressive Baseliner", "Serve & Volley", "All-Court"
+    "match_preference": "string" // "equal" (เท่ากัน), "higher" (เก่งกว่า), "lower" (อ่อนกว่า), "any"
   },
   "created_at": "datetime"
 }
@@ -193,7 +198,7 @@ ALM-X-IMPACT-Tennis/ (Root)
 }
 ```
 
-### 📅 3. Bookings/Queues Collection (ระบบจองคิว)
+### 📅 3. Bookings/Queues Collection (ระบบจองคิวสนาม)
 ```json
 {
   "_id": "ObjectId",
@@ -212,24 +217,39 @@ ALM-X-IMPACT-Tennis/ (Root)
 {
   "_id": "ObjectId",
   "host_user_id": "ObjectId", // ผู้สร้างโพสต์หาคู่เล่น
-  "invited_user_ids": ["ObjectId"], // ผู้ที่เข้ามาร่วมเล่นด้วย
+  "invited_user_ids": ["ObjectId"], // ผู้ที่เข้ามาร่วมเล่นด้วย (Array รองรับประเภทคู่)
   "court_id": "ObjectId",
-  "match_date": "string",
-  "time_slot": "string",
-  "skill_level_required": "string", // ระดับฝีมือที่ต้องการ
+  "match_date": "string", // YYYY-MM-DD
+  "time_slot": "string", // "18:00-20:00"
+  "match_type": "string", // "singles" (เดี่ยว) / "doubles" (คู่)
+  "ntrp_min": "number", // เกณฑ์ฝีมือขั้นต่ำที่เปิดรับ (เช่น 3.0)
+  "ntrp_max": "number", // เกณฑ์ฝีมือสูงสุดที่เปิดรับ (เช่น 4.5)
   "status": "string", // "open", "matched", "cancelled"
   "created_at": "datetime"
 }
 ```
 
-### 💳 5. Transactions Collection (ระบบโอนเงิน/ชำระเงิน)
+### 💬 5. Reviews Collection (ระบบรีวิวผู้เล่นและสนาม - UGC Content)
+```json
+{
+  "_id": "ObjectId",
+  "reviewer_id": "ObjectId", // ผู้เขียนรีวิว (Reference to Users)
+  "reviewee_id": "ObjectId", // ผู้ที่ถูกรีวิว (Reference to Users - เพื่อนร่วมแมตช์)
+  "match_id": "ObjectId", // รีวิวที่เกิดจากแมตช์การเล่นใด (Reference to Matches)
+  "rating": "number", // คะแนนเรตติ้ง (1 - 5 ดาว)
+  "comment": "string", // ความคิดเห็นเพิ่มเติม
+  "created_at": "datetime"
+}
+```
+
+### 💳 6. Transactions Collection (ระบบโอนเงิน/ชำระเงิน)
 ```json
 {
   "_id": "ObjectId",
   "user_id": "ObjectId",
   "amount": "number",
   "payment_method": "string", // "PromptPay", "BankTransfer"
-  "slip_url": "string", // ที่อยู่ไฟล์สลิปเพื่อใช้ตรวจสอบ
+  "slip_url": "string", // ที่อยู่ไฟล์ภาพสลิปบน Cloud
   "status": "string", // "pending", "verified", "failed"
   "verified_at": "datetime"
 }
@@ -238,23 +258,33 @@ ALM-X-IMPACT-Tennis/ (Root)
 ### 🔗 ความสัมพันธ์เบื้องต้น (Relationships)
 1.  **User กับ Booking (One-to-Many):** User 1 คน สามารถจองคิวสนามได้หลายครั้ง (`user_id` ในคอลเลกชัน Bookings)
 2.  **User กับ Match (One-to-Many / Many-to-Many):** User 1 คนสามารถเป็น Host สร้าง Match ได้หลายอัน และเข้าร่วม Match ของคนอื่นได้หลายอัน
-3.  **Booking กับ Transaction (One-to-One):** การจองคิว 1 รายการ จะสัมพันธ์กับการโอนชำระเงิน 1 รายการเสมอ (`payment_id` ใน Booking โยงไปยัง Transaction)
+3.  **Booking กับ Transaction (One-to-One):** การจองคิว 1 รายการ จะสัมพันธ์กับการโอนชำระเงิน 1 รายการเสมอ
+4.  **Match กับ Review (One-to-Many):** แมตช์ 1 แมตช์เมื่อสิ้นสุดการเล่นจะสามารถเกิดการรีวิวผู้เล่นที่ร่วมแมตช์ได้หลายรีวิว (UGC)
 
 ---
 
 ## 🔌 หัวข้อที่ 5: API Endpoints Contract (สัญญาข้อตกลง API)
 
-สัญญาการเชื่อมต่อระหว่าง Frontend (Next.js) และ Backend (FastAPI) เพื่อให้ทีมสามารถแยกย้ายกันทำงานได้โดยโค้ดไม่พัง
+สัญญาการเชื่อมต่อเพื่อประสิทธิภาพในการทำงานร่วมกันระหว่างหน้าบ้าน (Next.js) และหลังบ้าน (FastAPI) โดยเพิ่มการรองรับ Google Login, SMS OTP, และการส่งรีวิว UGC ตามโฟลว์จริง
 
-### 🔐 1. Authentication (ระบบสมาชิก)
+### 🔐 1. Authentication (ระบบสมาชิกและความปลอดภัย)
 
 #### `POST /api/v1/auth/login`
-*   **คำอธิบาย:** สำหรับการเข้าสู่ระบบ
+*   **คำอธิบาย:** สำหรับการเข้าสู่ระบบแบบเดิมด้วยอีเมล
 *   **Request Body:**
     ```json
     {
       "email": "user@example.com",
       "password": "securepassword123"
+    }
+    ```
+
+#### `POST /api/v1/auth/google`
+*   **คำอธิบาย:** สำหรับการเข้าสู่ระบบด้วย Google Account (SSO)
+*   **Request Body:**
+    ```json
+    {
+      "id_token": "google_oauth_jwt_token_string"
     }
     ```
 *   **Response (200 OK):**
@@ -264,9 +294,45 @@ ALM-X-IMPACT-Tennis/ (Root)
       "token_type": "bearer",
       "user": {
         "id": "60d5ec4b2f8fb8123456789a",
-        "username": "tennis_lover",
-        "role": "player"
+        "username": "tennis_player_sso",
+        "email": "user@gmail.com",
+        "role": "player",
+        "is_phone_verified": false
       }
+    }
+    ```
+
+#### `POST /api/v1/auth/otp/send`
+*   **คำอธิบาย:** ขอส่งรหัส OTP ยืนยันเบอร์โทรศัพท์มือถือผ่าน SMS
+*   **Request Body:**
+    ```json
+    {
+      "phone": "0812345678"
+    }
+    ```
+*   **Response (200 OK):**
+    ```json
+    {
+      "message": "OTP sent successfully to 0812345678",
+      "ref_code": "XYZA"
+    }
+    ```
+
+#### `POST /api/v1/auth/otp/verify`
+*   **คำอธิบาย:** ยืนยันรหัส OTP จากโทรศัพท์มือถือเพื่อบันทึกสถานะในฐานข้อมูล
+*   **Request Body:**
+    ```json
+    {
+      "phone": "0812345678",
+      "otp_code": "123456",
+      "ref_code": "XYZA"
+    }
+    ```
+*   **Response (200 OK):**
+    ```json
+    {
+      "status": "success",
+      "message": "Phone number verified successfully"
     }
     ```
 
@@ -310,17 +376,20 @@ ALM-X-IMPACT-Tennis/ (Root)
 
 ---
 
-### 🤝 3. Matchmaking (ระบบหาคู่เล่น/จับคู่)
+### 🤝 3. Matchmaking & Filtering (ระบบหาคู่เล่น/จับคู่ตามระดับความเก่ง)
 
 #### `POST /api/v1/matching/find`
-*   **คำอธิบาย:** ค้นหาหรือประกาศเปิดรับจับคู่เล่น
+*   **คำอธิบาย:** ใช้ค้นหาผู้เล่นหรือเปิดโพสต์ห้องหาคู่เล่น โดยคัดกรองระดับ NTRP และสเปกความชอบโดยละเอียด
 *   **Request Body:**
     ```json
     {
       "court_id": "60d5ec4b2f8fb8123456789c",
       "match_date": "2026-05-25",
       "time_slot": "18:00-20:00",
-      "skill_level_required": "Intermediate"
+      "match_type": "singles", // "singles" / "doubles"
+      "ntrp_min": 2.5, // กรองระดับ NTRP ขั้นต่ำ
+      "ntrp_max": 4.0, // กรองระดับ NTRP สูงสุด
+      "preferred_playing_style": "All-Court" // ออปชันกรองสไตล์การเล่น
     }
     ```
 *   **Response (200 OK):**
@@ -328,13 +397,47 @@ ALM-X-IMPACT-Tennis/ (Root)
     {
       "match_id": "60d5ec4b2f8fb8123456789d",
       "status": "open",
-      "host": "tennis_lover"
+      "host": {
+        "username": "tennis_lover",
+        "ntrp": 3.0,
+        "playing_style": "Aggressive Baseliner"
+      },
+      "compatible_matches": [
+        {
+          "user_id": "60d5ec4b2f8fb8123456789z",
+          "username": "net_rusher",
+          "ntrp": 3.5
+        }
+      ]
     }
     ```
 
 ---
 
-### 💳 4. Payments (ระบบชำระเงินและโอน)
+### 💬 4. Player Reviews & UGC (การรีวิวหลังแมตช์)
+
+#### `POST /api/v1/matches/{id}/reviews`
+*   **คำอธิบาย:** ผู้เล่นส่งคำติชมรีวิวหลังเกมให้กับเพื่อนร่วมเล่นเพื่อเพิ่มคะแนนเรตติ้งในสังคม (UGC Loop)
+*   **Request Body:**
+    ```json
+    {
+      "reviewee_id": "60d5ec4b2f8fb8123456789z", // รหัสผู้ใช้ที่จะรีวิวให้
+      "rating": 5, // 1-5 ดาว
+      "comment": "เล่นสนุกมาก คุมหน้าเน็ตได้ดี สุภาพมาก"
+    }
+    ```
+*   **Response (201 Created):**
+    ```json
+    {
+      "status": "success",
+      "message": "Review submitted successfully",
+      "review_id": "60d5ec4b2f8fb8123456789r"
+    }
+    ```
+
+---
+
+### 💳 5. Payments (ระบบชำระเงินและโอน)
 
 #### `POST /api/v1/payments/pay`
 *   **คำอธิบาย:** ส่งหลักฐานการโอนชำระเงินคิวสนาม
@@ -353,7 +456,7 @@ ALM-X-IMPACT-Tennis/ (Root)
 
 ---
 
-### 🔍 5. General Data (ดึงข้อมูลทั่วไป)
+### 🔍 6. General Data (ดึงข้อมูลทั่วไป)
 
 #### `GET /api/v1/data`
 *   **คำอธิบาย:** ดึงข้อมูลสถิติทั่วไปหรือการตั้งค่าหลักของระบบมาแสดงที่ Dashboard หน้าบ้าน
@@ -369,5 +472,30 @@ ALM-X-IMPACT-Tennis/ (Root)
 
 ---
 
+## 🚀 หัวข้อที่ 6: Future Project Roadmap (แผนงานและทิศทางการพัฒนา)
+
+เพื่อรองรับการขยายตัวทางเทคนิคและสถาปัตยกรรม ฐานข้อมูลจะถูกออกแบบให้รองรับฟีเจอร์ระดับสูงในอนาคตตามลำดับการทำงาน (Phasing) ดังนี้:
+
+### 🏆 Phase 1 - Core MVP Feature (เฟสปัจจุบัน)
+*   **ระบบจองคิวสนามเทนนิสแบบระบุวันและเวลา**
+*   **ระบบ Google OAuth + เบอร์โทรศัพท์ SMS OTP**
+*   **ระบบจับคู่ (Core Matching Algorithm) คัดกรองตามเรตติ้ง NTRP (1.5 - 7.0)**
+*   **ระบบตรวจสอบสลิปโอนเงิน (Payment Upload Verification)**
+*   **ระบบรีวิวหลังแมตช์ (User Reviews - UGC)**
+
+### 🎓 Phase 2 - Membership & Advanced Features
+*   **ระบบจองโค้ช (Coach Booking System):** เพิ่มคอลเลกชัน `coaches` และระบบชำระเงินจองคอร์สเรียนเทนนิส
+*   **ระบบระดับสมาชิก (Member Tier / Privilege):** รองรับระบบสมาชิก Bronze, Silver, Gold, Platinum และสิทธิพิเศษ
+*   **ระบบราคาสำหรับสมาชิก (Member Pricing Engine):** ปรับคำนวณราคาสนามแบบ dynamic ตามเวลาและระดับสมาชิก
+*   **ระบบรายงานกิจกรรมผู้ใช้ (User Activity Analytics):** ตารางบันทึก log การเล่นเพื่อใช้ประมวลผล Retention และ Usage pattern
+
+### 🛍️ Phase 3 - Marketplace & Service Explanation
+*   **ระบบขายสินค้าและบริการในสนาม (Storefront/Merchandise):** เพิ่ม e-commerce ขนาดเล็กสำหรับจองน้ำ ดื่ม ไม้เทนนิส ลูกเทนนิส
+*   **ระบบ Voucher Redeem:** รองรับการกรอกโค้ดลดราคาสนามหรือชำระเงินด้วยคูปอง
+*   **Service Marketplace (Digital Service Layer):** บริการดิจิทัลเพิ่มเติม เช่น การเช่าผู้เล่นมือโปรมาซ้อมด้วย
+
+---
+
 > 📝 **คำแนะนำสำหรับพัฒนาต่อ:** 
 > หลังจากที่สมาชิกทีมตกลงรายละเอียดและปรับปรุงตัวแปรต่าง ๆ เรียบร้อยแล้ว ให้ทำการอัปเดตไฟล์นี้ทันทีเพื่อรักษาสัญญาการออกแบบ API (API Contract) และฐานข้อมูลให้สอดคล้องกันเสมอ
+
