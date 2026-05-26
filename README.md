@@ -16,19 +16,17 @@
 
 | ส่วนงาน | เทคโนโลยี | เวอร์ชันที่กำหนด | URL / Port ท้องถิ่น |
 | :--- | :--- | :--- | :--- |
-| **หน้าบ้าน (Frontend)** | Next.js (App Router), React 19, TypeScript | `Next.js 15.1.0` | `http://localhost:3000` |
+| **หน้าบ้าน (Frontend)** | Wix.com | - | เชื่อมต่อผ่าน API |
 | **หลังบ้าน (Backend)** | Python (FastAPI), Uvicorn, Beanie ODM | `Python 3.11.9` | `http://localhost:8000` |
 | **ฐานข้อมูล (Database)** | MongoDB Community Server | `MongoDB v7.0.9` | `mongodb://localhost:27017` |
 
 ---
 
-## 📂 โครงสร้างโฟลเดอร์ (Mono-Repo Directory Structure)
-เราใช้รูปแบบ **Mono-Repo** ในการเก็บโค้ดทั้งหมดไว้ในที่เดียวเพื่ออำนวยความสะดวกในการประสานงาน:
+## 📂 โครงสร้างโฟลเดอร์ (Directory Structure)
 ```text
 ALM-X-IMPACT-Tennis/
 ├── docs/                 # เอกสารสเปกโครงการและการวิเคราะห์ฟีเจอร์
-├── frontend/             # หน้าบ้านพัฒนาด้วย Next.js 15 + TypeScript
-├── backend/              # หลังบ้านพัฒนาด้วย Python FastAPI + MongoDB
+├── backend/              # หลังบ้านพัฒนาด้วย Python FastAPI + MongoDB (เชื่อมต่อกับ Wix.com)
 └── database/             # Scripts สำหรับ Seed data และ Config ทั่วไป
 ```
 
@@ -38,31 +36,12 @@ ALM-X-IMPACT-Tennis/
 
 ### 💻 1. การเตรียมสภาพแวดล้อม (Prerequisites)
 ตรวจสอบให้แน่ใจว่าเครื่องคอมพิวเตอร์ของคุณลงโปรแกรมเหล่านี้ตามเวอร์ชันของเครื่องพัฒนาหลัก:
-*   **Node.js:** เวอร์ชัน `v22.16.0` ขึ้นไป (เช็กด้วย `node -v`)
-*   **npm:** เวอร์ชัน `v10.9.2` ขึ้นไป (เช็กด้วย `npm -v`)
 *   **Python:** เวอร์ชัน `v3.11.9` (เช็กด้วย `python --version`)
 *   **MongoDB:** ติดตั้ง MongoDB Community Server และเปิดรันที่พอร์ต `27017`
 
 ---
 
-### 🌐 2. การตั้งค่าฝั่งหน้าบ้าน (Frontend Setup)
-1. ไปยังโฟลเดอร์ frontend:
-   ```bash
-   cd frontend
-   ```
-2. ติดตั้งไลบรารีทั้งหมด (หากเกิดข้อผิดพลาดด้านความเข้ากันได้ของ React 19 ให้ใส่แฟล็กต่อท้าย):
-   ```bash
-   npm install --legacy-peer-deps
-   ```
-3. สตาร์ทเซิร์ฟเวอร์สำหรับนักพัฒนา:
-   ```bash
-   npm run dev
-   ```
-4. เปิดเบราว์เซอร์เข้าสู่ระบบที่: `http://localhost:3000`
-
----
-
-### 🐍 3. การตั้งค่าฝั่งหลังบ้าน (Backend Setup)
+### 🐍 2. การตั้งค่าฝั่งหลังบ้าน (Backend Setup)
 1. ไปยังโฟลเดอร์ backend:
    ```bash
    cd backend
