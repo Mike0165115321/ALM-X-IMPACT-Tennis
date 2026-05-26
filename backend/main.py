@@ -1,7 +1,9 @@
 import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+# pyrefly: ignore [missing-import]
 from motor.motor_asyncio import AsyncIOMotorClient
+# pyrefly: ignore [missing-import]
 from beanie import init_beanie
 
 from app.config import settings
@@ -17,38 +19,19 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# 🌐 Config CORS (เพื่อให้ Next.js Port 3000 เรียกใช้ FastAPI ได้)
+# 🌐 Config CORS (เปิดรับการร้องขอจาก Wix.com ทุกโดเมนเพื่อทดสอบและใช้งาน)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# 🚀 ทำงานตอนระบบกำลังเปิดตัว (Database Initialization)
+# 🚀 ทำงานตอนระบบกำลังเปิดตัว (ข้ามการเชื่อมต่อฐานข้อมูลสำหรับการทดสอบ API หน้าบ้าน)
 @app.on_event("startup")
 async def startup_event():
-    logger.info("กำลังเชื่อมต่อฐานข้อมูล MongoDB...")
-    try:
-        # เปิดการเชื่อมต่อ Async กับ MongoDB
-        client = AsyncIOMotorClient(settings.MONGODB_URL)
-        
-        # เริ่มต้นใช้งาน Beanie พร้อมผูกคอลเลกชันเอกสาร
-        await init_beanie(
-            database=client[settings.DATABASE_NAME],
-            document_models=[
-                User,
-                Court,
-                Booking,
-                Match,
-                Review,
-                Transaction
-            ]
-        )
-        logger.info("เชื่อมต่อ MongoDB และเริ่มต้นระบบ Beanie ODM สำเร็จ!")
-    except Exception as e:
-        logger.error(f"เกิดข้อผิดพลาดในการเปิดระบบฐานข้อมูล: {e}")
+    logger.info("⚠️ [API Test Mode] ข้ามการเชื่อมต่อฐานข้อมูล MongoDB ชั่วคราว...")
 
 # 📍 API Endpoint หน้าโฮม
 @app.get("/")

@@ -76,7 +76,7 @@
 แผนผังแสดงสถาปัตยกรรมของระบบและการไหลของข้อมูล (Data Flow) พร้อมทั้งกำหนด Port ในการพัฒนาบนเครื่อง Local Machine
 
 ### 💻 Local Development Ports
-*   **Frontend (Next.js):** `http://localhost:3000`
+*   **Frontend:** เชื่อมต่อผ่าน API จาก Wix.com
 *   **Backend (Python/FastAPI):** `http://localhost:8000`
 *   **Database (MongoDB):** `mongodb://localhost:27017`
 
@@ -84,27 +84,23 @@
 ```mermaid
 graph TD
     %% Define Nodes
-    Client["💻 Client Browser\n(React / Next.js)"]
-    Frontend["🌐 Next.js Server\n(Port 3000)"]
+    Client["💻 Wix.com Frontend\n(Velo / Custom App)"]
     Backend["🐍 Python FastAPI\n(Port 8000)"]
     Database[("🗄️ MongoDB\n(Port 27017)")]
     PaymentGateway["💳 Third-Party Payment API\n(เช่น QR Code / Slip Verification)"]
 
     %% Define Connections
-    Client <-->|1. HTTP / WebSockets| Frontend
-    Client <-->|2. API Requests| Backend
-    Backend <-->|3. Queries / Updates| Database
-    Backend <-->|4. Verify Payment| PaymentGateway
+    Client <-->|1. API Requests| Backend
+    Backend <-->|2. Queries / Updates| Database
+    Backend <-->|3. Verify Payment| PaymentGateway
 
     %% Style classes
     classDef client fill:#f9f,stroke:#333,stroke-width:2px;
-    classDef web fill:#bbf,stroke:#333,stroke-width:2px;
     classDef api fill:#bfb,stroke:#333,stroke-width:2px;
     classDef db fill:#ffb,stroke:#333,stroke-width:2px;
     classDef ext fill:#fbb,stroke:#333,stroke-width:2px;
 
     class Client client;
-    class Frontend web;
     class Backend api;
     class Database db;
     class PaymentGateway ext;
@@ -116,14 +112,13 @@ graph TD
 
 ข้อตกลงร่วมกันในการบริหารจัดการซอร์สโค้ดผ่านระบบ Git บน GitHub Organization
 
-### 📁 1. Repository Strategy: Mono-Repo
-โครงการนี้ใช้โครงสร้างแบบ **Mono-Repo** (รวมโฟลเดอร์ไว้ใน Repository เดียวกัน) เพื่อความสะดวกในการจัดการเวอร์ชันและการประสานงาน
+### 📁 1. Repository Strategy: Backend & Docs Workspace
+โครงการนี้ใช้โครงสร้างโฟลเดอร์สำหรับเก็บโค้ดส่วนของระบบหลังบ้านและเอกสารของระบบทั้งหมด:
 
 ```text
 ALM-X-IMPACT-Tennis/ (Root)
 ├── docs/                 # เอกสารกลางและข้อกำหนดต่าง ๆ (เช่น project_specification.md)
-├── frontend/             # ซอร์สโค้ดส่วนหน้าบ้าน (Next.js)
-├── backend/              # ซอร์สโค้ดส่วนหลังบ้าน (Python FastAPI)
+├── backend/              # ซอร์สโค้ดส่วนหลังบ้าน (Python FastAPI เชื่อมกับ Wix.com)
 └── database/             # สคริปต์การตั้งค่า Schema, Seed Data หรือ Migration
 ```
 
