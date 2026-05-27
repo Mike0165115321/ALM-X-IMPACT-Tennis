@@ -46,6 +46,8 @@
   - Mock Matches 1 แมตช์, Mock Reviews 1 รีวิว, Mock Transactions 2 รายการ
   - Mock OTP Store (dictionary เก็บ OTP ชั่วคราว)
 - ✅ สร้าง `app/services/data_service.py` — Business Logic Layer กลาง เรียกอ่าน/เขียนข้อมูลทั้งหมดผ่าน Mock Dictionary
+- ✅ สร้าง `app/services/storage_service.py` — โมดูลจัดการระบบอัปโหลดไฟล์รูปภาพสลิปและการบริการไฟล์ static ในเครื่องสำหรับการรันจำลองโลคอล
+
 
 ### 0.5 ระบบทดสอบ (Test Suites) ✅
 - ✅ สร้าง `test_integration.py` — ชุดทดสอบ Full Player Workflow (สมัคร → ส่ง OTP → ยืนยัน OTP → ดูสนาม → จองสนาม → อัปโหลดสลิป → Admin อนุมัติ → สถานะ confirmed)
@@ -99,7 +101,7 @@
 |---|--------|--------|-------------------|------------|
 | 1 | Endpoint `GET /api/v1/courts?date=YYYY-MM-DD` | ✅ | `routers/courts.py` | ดึงรายการสนามทั้งหมด + สล็อตเวลาว่าง/เต็ม ตามวันที่ระบุ, Validate ฟอร์แมตวันที่ |
 | 2 | Dynamic Slot Availability | ✅ | `routers/courts.py` | ตรวจสอบ `is_booked` แบบ Real-time จาก booking data (ไม่ใช่ค่าตายตัว) |
-| 3 | **เชื่อมต่อ DB จริง** — ให้ดึงข้อมูลสนามจาก MongoDB แทน `mock_courts` | 🟡 | `routers/courts.py` | ตอนนี้ loop อ่านจาก `mock_courts` dictionary โดยตรง |
+| 3 | **เชื่อมต่อ DB จริง** — ให้ดึงข้อมูลสนามจาก MongoDB แทน `mock_courts` | 🟡 | `routers/courts.py` | ตอนนี้เรียกผ่าน `DataService.get_all_courts()` ซึ่งเข้าไปดึงจาก `mock_courts` dictionary อีกทอดหนึ่ง (แยกขาดจากกันเรียบร้อย) |
 
 ---
 
@@ -108,7 +110,7 @@
 | # | รายการ | สถานะ | ไฟล์ที่เกี่ยวข้อง | รายละเอียด |
 |---|--------|--------|-------------------|------------|
 | 1 | Endpoint `GET /api/v1/queues` | ✅ | `routers/queues.py` | ดึงรายการจองของตัวเอง / ทั้งหมด (ถ้าเป็น admin) |
-| 2 | Endpoint `POST /api/v1/queues/book` | ✅ | `routers/queues.py` | จองสนาม — ตรวจ OTP verified → ตรวจ court_id มีจริง → ตรวจวันที่ → ตรวจ slot ซ้ำ → ตรวจ user จองซ้ำ → สร้าง booking (status = `pending_payment`) |
+| 2 | Endpoint `POST /api/v1/queues/book` | ✅ | `routers/queues.py` | จองสนาม — ตรวจ OTP verified → ตรวจ court_id ผ่าน `DataService.get_court_by_id()` → ตรวจวันที่ → ตรวจ slot ซ้ำ → ตรวจ user จองซ้ำ → สร้าง booking (status = `pending_payment`) |
 | 3 | Endpoint `PATCH /api/v1/queues/{id}/cancel` | ✅ | `routers/queues.py` | ยกเลิกการจอง — ตรวจเจ้าของ/admin + ตรวจสถานะที่ยกเลิกได้ |
 | 4 | Guard: ต้องยืนยัน OTP ก่อนจอง | ✅ | `routers/queues.py` | ตรวจ `is_phone_verified == True` ก่อนสร้าง booking |
 | 5 | Guard: Slot Conflict (409) | ✅ | `data_service.py` | `is_slot_booked()` ตรวจว่า court+date+slot มีคนจองแล้ว (ไม่นับ cancelled/rejected) |

@@ -100,3 +100,23 @@
 *   **`SMSGatewayException`**: ถูกโยนเมื่อเน็ตหลุด ไม่สามารถเชื่อมต่อกับ ThaiBulkSMS ได้ หรือส่ง OTP ไม่ผ่าน (HTTP 502 Bad Gateway)
 *   **`SlotConflictException`**: ถูกโยนเมื่อสล็อตเวลานั้นมีคนจองไปแล้ว (HTTP 409 Conflict)
 *   **`UserDuplicateBookingException`**: ถูกโยนเมื่อผู้ใช้คนเดิมกดจองสนามสล็อตเดิมซ้ำ (HTTP 400 Bad Request)
+
+---
+
+## 📂 5. ระบบจัดเก็บไฟล์รูปสลิป (Storage Service & File Uploads)
+
+ระบบการอัปโหลดไฟล์ภาพสลิปโอนเงิน ได้รับการออกแบบโครงสร้างตามหลัก **Decoupled Architecture** เพื่ออำนวยความสะดวกในการเปลี่ยนผ่านระบบจัดเก็บไฟล์ในอนาคต:
+
+### ⚙️ สถาปัตยกรรมและการทำงานปัจจุบัน (Local Storage Simulation):
+1.  **บริการอิสระ (`StorageService`):** ควบคุมและดูแลผ่านคลาส [storage_service.py](file:///c:/GitHub/ALM-X-IMPACT-Tennis/backend/app/services/storage_service.py) เพียงจุดเดียว
+2.  **การบันทึกไฟล์จริง:** ในเฟสจำลองนี้ ระบบจะนำรูปสลิปจาก Request บันทึกตรงลงโฟลเดอร์ **`backend/uploads/`** ในฮาร์ดดิสก์หลังบ้าน พร้อมสร้างชื่อไฟล์เฉพาะเพื่อความปลอดภัย: `{booking_id}_{timestamp}_{uuid_hex}.png`
+3.  **การบริการ Static Files:** เมื่อเปิดเซิร์ฟเวอร์ ระบบจะนำเข้า `StorageService.init_app(app)` เพื่อสร้างโฟลเดอร์และเปิดท่อบริการไฟล์ภาพทางช่องทาง Static HTTP ทำให้เปิดลิงก์รูปสลิปดูบนเบราว์เซอร์ได้ทันที
+4.  **Base URL แบบไดนามิก:** รูปสลิปจะถูกส่งกลับไปในรูปแบบลิงก์เต็มรูปแบบ เช่น `http://localhost:8000/uploads/filename.png` อ้างอิงตามเซิร์ฟเวอร์ที่กำลังทำงานอยู่ ณ ขณะนั้นจริง
+
+### 🚀 วิธีการเปลี่ยนผ่านสู่ Google Cloud Storage / AWS S3 ในอนาคต:
+เมื่อเข้าสู่โปรดักชันและต้องการบันทึกสลิปขึ้น Cloud Bucket จริง **เราแก้ไขเฉพาะที่ไฟล์บริการนี้เท่านั้นโดยไม่กระทบจุดอื่นเลย**:
+1.  เข้าไปที่ [storage_service.py](file:///c:/GitHub/ALM-X-IMPACT-Tennis/backend/app/services/storage_service.py)
+2.  แก้ไขฟังก์ชัน `init_app(app)` เพื่อทำหน้าที่สร้างการเชื่อมต่อเริ่มต้นกับ Google Cloud Storage SDK หรือ S3 Client
+3.  แก้ไขฟังก์ชัน `upload_slip(slip_file, booking_id, request)` ให้ทำหน้าที่เปลี่ยนจากการเขียนไฟล์ลงเครื่อง (`open(file, "wb")`) ไปเป็น **`storage_client.upload_from_file(...)`** และส่ง URL จริงของ Cloud Storage กลับไปแทน
+4.  *ผลลัพธ์:* โค้ดในฝั่งของ API / Routers และ `main.py` จะยังคงทำงานได้ปกติโดยไม่มีการแก้ไขแม้แต่บรรทัดเดียว!
+
