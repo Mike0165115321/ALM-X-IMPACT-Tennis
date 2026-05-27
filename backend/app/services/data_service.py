@@ -170,6 +170,15 @@ class DataService:
             logger.error(f"❌ [System Error] เกิดข้อผิดพลาดในระบบตรวจรหัส OTP: {str(e)}")
             return False
 
+    # 🏛️ 2.5 Courts Services
+    @staticmethod
+    def get_all_courts() -> List[Dict[str, Any]]:
+        return list(mock_courts.values())
+
+    @staticmethod
+    def get_court_by_id(court_id: str) -> Optional[Dict[str, Any]]:
+        return mock_courts.get(court_id)
+
     # 📅 3. Bookings Services
     @staticmethod
     def get_bookings_by_user(user_id: str) -> List[Dict[str, Any]]:

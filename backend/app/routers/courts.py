@@ -2,7 +2,6 @@ from fastapi import APIRouter, Query, HTTPException, status
 from typing import List, Dict, Any
 from datetime import datetime
 
-from app.services.mock_db import mock_courts, mock_bookings
 from app.services.data_service import DataService
 
 router = APIRouter(prefix="/api/v1/courts", tags=["Courts"])
@@ -22,16 +21,20 @@ def list_courts(date: str = Query(None, description="วันที่ต้อ
         )
         
     result = []
-    for court_id, court in mock_courts.items():
+    # ดึงข้อมูลสนามผ่านชั้น DataService เท่านั้น ไม่ดึงจากฐานข้อมูลจำลองโดยตรง
+    courts = DataService.get_all_courts()
+    
+    for court in courts:
+        court_id = court["id"]
         court_copy = {
-            "id": court["id"],
+            "id": court_id,
             "court_name": court["court_name"],
             "location": court["location"],
             "price_per_hour": court["price_per_hour"],
             "available_slots": []
         }
         
-        # สำหรับแต่ละ slot ในสล็อตที่มี ให้ประเมินความพร้อมแบบ Dynamic อ้างอิงจาก mock_bookings
+        # สำหรับแต่ละ slot ในสล็อตที่มี ให้ประเมินความพร้อมแบบ Dynamic อ้างอิงจากคิวการจองในระบบ
         for slot in court["available_slots"]:
             time_slot = slot["time_slot"]
             # ตรวจสอบว่าในวันที่กำหนด มีคนจองและยืนยัน/อยู่ระหว่างดำเนินการในระบบแล้วหรือไม่
@@ -45,3 +48,4 @@ def list_courts(date: str = Query(None, description="วันที่ต้อ
         result.append(court_copy)
         
     return result
+

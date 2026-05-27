@@ -4,7 +4,6 @@ from typing import List, Dict, Any
 from datetime import datetime
 
 from app.services.data_service import DataService
-from app.services.mock_db import mock_courts
 from app.routers.auth import get_current_user
 
 router = APIRouter(prefix="/api/v1/queues", tags=["Queue & Booking"])
@@ -35,8 +34,8 @@ def book_court(payload: BookRequest, current_user: Dict[str, Any] = Depends(get_
             detail="กรุณายืนยันเบอร์โทรศัพท์ด้วย OTP ก่อนจองสนาม"
         )
         
-    # 1. ตรวจสอบว่ามีสนามนี้ในระบบจริงหรือไม่
-    if payload.court_id not in mock_courts:
+    # 1. ตรวจสอบว่ามีสนามนี้ในระบบจริงหรือไม่ ผ่าน DataService เท่านั้น
+    if not DataService.get_court_by_id(payload.court_id):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="ไม่พบสนามที่ระบุในระบบ"

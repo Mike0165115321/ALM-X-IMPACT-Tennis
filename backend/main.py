@@ -1,6 +1,7 @@
 import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
 # pyrefly: ignore [missing-import]
 from motor.motor_asyncio import AsyncIOMotorClient
 # pyrefly: ignore [missing-import]
@@ -26,6 +27,8 @@ app = FastAPI(
     version="1.0.0"
 )
 
+from app.services.storage_service import StorageService
+
 # 🌐 Config CORS (เปิดรับการร้องขอจาก Wix.com ทุกโดเมนเพื่อทดสอบและใช้งาน)
 app.add_middleware(
     CORSMiddleware,
@@ -34,6 +37,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# 📂 เริ่มต้นระบบจัดเก็บไฟล์ผ่าน StorageService (เปลี่ยนพฤติกรรมฝั่งคลาวด์/จำลองในไฟล์โมดูลนั้นได้เลย)
+StorageService.init_app(app)
+
 
 # ลงทะเบียน Routers เข้ากับ App หลัก
 app.include_router(auth.router)
@@ -62,4 +69,5 @@ def read_root():
 @app.get("/api/v1/data")
 async def get_dashboard_data():
     return DataService.get_dashboard_stats()
+
 
