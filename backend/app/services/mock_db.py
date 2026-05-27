@@ -181,3 +181,19 @@ mock_transactions: Dict[str, Dict[str, Any]] = {
 
 # OTP Temporary Store (phone -> {otp_code, ref_code, expires_at})
 mock_otp_store: Dict[str, Dict[str, Any]] = {}
+
+# 📂 โหลดข้อมูลผู้ใช้เพิ่มเติมจากไฟล์ seeded_users.json (หากมีอยู่จากการอิมพอร์ต CSV)
+import os
+import json
+try:
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    seeded_file_path = os.path.join(current_dir, "seeded_users.json")
+    if os.path.exists(seeded_file_path):
+        with open(seeded_file_path, "r", encoding="utf-8") as f:
+            seeded_data = json.load(f)
+            # ผสานข้อมูลประชากรผู้ใช้ 767 คนเข้าร่วมใน In-Memory DB
+            mock_users.update(seeded_data)
+except Exception as e:
+    import logging
+    logging.getLogger("backend").warning(f"ไม่สามารถโหลดไฟล์ seeded_users.json ได้: {str(e)}")
+
