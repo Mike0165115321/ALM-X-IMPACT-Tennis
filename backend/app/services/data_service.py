@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional
 from app.services.mock_db import (
     mock_users, mock_courts, mock_bookings, mock_matches,
@@ -63,16 +63,50 @@ class DataService:
     # 📞 2. SMS OTP Services
     @staticmethod
     def save_otp(phone: str, otp_code: str, ref_code: str):
+        # ตรวจสอบ Rate Limiting (สูงสุด 3 ครั้งใน 15 นาทีต่อเบอร์)
+        now = datetime.utcnow()
+        limit_time = now - timedelta(minutes=15)
+        
+        # เราเก็บประวัติการส่งใน mock_otp_store เป็นประวัติการร้องขอใน session นี้ได้
+        # เพื่อความง่ายสำหรับ mock: บันทึกข้อมูล OTP ล่าสุด
         mock_otp_store[phone] = {
             "otp_code": otp_code,
             "ref_code": ref_code,
-            "created_at": datetime.utcnow()
+            "created_at": now,
+            "request_count": mock_otp_store.get(phone, {}).get("request_count", 0) + 1,
+            "last_request_at": now
         }
+
+    @staticmethod
+    def check_otp_rate_limit(phone: str) -> bool:
+        # ตรวจสอบว่ามีการร้องขอเกิน 3 ครั้งใน 15 นาทีหรือไม่
+        otp_entry = mock_otp_store.get(phone)
+        if not otp_entry:
+            return True
+        
+        now = datetime.utcnow()
+        # ถ้าร้องขอครั้งล่าสุดเกิน 15 นาทีแล้ว ให้รีเซ็ตประวัติการส่ง
+        if now - otp_entry["created_at"] > timedelta(minutes=15):
+            otp_entry["request_count"] = 0
+            return True
+            
+        if otp_entry["request_count"] >= 3:
+            return False
+        return True
 
     @staticmethod
     def verify_otp(phone: str, otp_code: str, ref_code: str) -> bool:
         otp_entry = mock_otp_store.get(phone)
-        if otp_entry and otp_entry["otp_code"] == otp_code and otp_entry["ref_code"] == ref_code:
+        if not otp_entry:
+            return False
+            
+        # ตรวจสอบการหมดอายุ 5 นาที (5-min TTL)
+        now = datetime.utcnow()
+        if now - otp_entry["created_at"] > timedelta(minutes=5):
+            mock_otp_store.pop(phone, None)
+            return False
+            
+        if otp_entry["otp_code"] == otp_code and otp_entry["ref_code"] == ref_code:
             # ค้นหาผู้ใช้และบันทึกสถานะ
             for user in mock_users.values():
                 if user["profile"]["phone"] == phone:
@@ -88,7 +122,6 @@ class DataService:
         user_bookings = []
         for booking in mock_bookings.values():
             if booking["user_id"] == user_id:
-                # เติมชื่อสนามเพื่อแสดงใน Response ตามสัญญา API
                 court = mock_courts.get(booking["court_id"])
                 booking_copy = booking.copy()
                 booking_copy["court_name"] = court["court_name"] if court else "Unknown Court"
@@ -108,6 +141,31 @@ class DataService:
         return all_bookings
 
     @staticmethod
+    def get_booking_by_id(booking_id: str) -> Optional[Dict[str, Any]]:
+        return mock_bookings.get(booking_id)
+
+    @staticmethod
+    def is_slot_booked(court_id: str, booking_date: str, time_slot: str) -> bool:
+        # ตรวจสอบการจองที่มีสถานะใช้งานอยู่ (ไม่ใช่ cancelled หรือ payment_rejected)
+        for booking in mock_bookings.values():
+            if (booking["court_id"] == court_id and 
+                booking["booking_date"] == booking_date and 
+                booking["time_slot"] == time_slot and 
+                booking["status"] not in ["cancelled", "payment_rejected"]):
+                return True
+        return False
+
+    @staticmethod
+    def has_user_booked_slot(user_id: str, booking_date: str, time_slot: str) -> bool:
+        for booking in mock_bookings.values():
+            if (booking["user_id"] == user_id and 
+                booking["booking_date"] == booking_date and 
+                booking["time_slot"] == time_slot and 
+                booking["status"] not in ["cancelled", "payment_rejected"]):
+                return True
+        return False
+
+    @staticmethod
     def create_booking(user_id: str, court_id: str, booking_date: str, time_slot: str) -> Dict[str, Any]:
         booking_id = generate_id()
         new_booking = {
@@ -116,20 +174,20 @@ class DataService:
             "court_id": court_id,
             "booking_date": booking_date,
             "time_slot": time_slot,
-            "status": "pending_payment",  # ปรับเป็น pending_payment ตาม API Contract
+            "status": "pending_payment",
             "payment_id": None,
             "created_at": datetime.utcnow()
         }
         mock_bookings[booking_id] = new_booking
-        
-        # ปรับสถานะสล็อตเวลาในสนาม
-        court = mock_courts.get(court_id)
-        if court:
-            for slot in court["available_slots"]:
-                if slot["time_slot"] == time_slot:
-                    slot["is_booked"] = True
-                    
         return new_booking
+
+    @staticmethod
+    def cancel_booking(booking_id: str) -> Optional[Dict[str, Any]]:
+        booking = mock_bookings.get(booking_id)
+        if not booking:
+            return None
+        booking["status"] = "cancelled"
+        return booking
 
     # 🤝 4. Matchmaking Services
     @staticmethod
@@ -142,15 +200,12 @@ class DataService:
         ntrp_max: float,
         preferred_playing_style: Optional[str] = None
     ) -> List[Dict[str, Any]]:
-        # ค้นหาผู้เล่นที่ตรงกับเงื่อนไข
         compatible_matches = []
         for user in mock_users.values():
             if user["role"] != "player":
                 continue
             profile = user["profile"]
-            # กรองตามระดับ NTRP
             if ntrp_min <= profile["ntrp_rating"] <= ntrp_max:
-                # กรองตามสไตล์การเล่นถ้ามีการระบุ
                 if preferred_playing_style and profile["playing_style"] != preferred_playing_style:
                     continue
                 compatible_matches.append({
@@ -222,21 +277,69 @@ class DataService:
         new_tx = {
             "id": tx_id,
             "user_id": user_id,
+            "booking_id": booking_id,
             "amount": amount,
             "payment_method": payment_method,
             "slip_url": slip_url,
-            "status": "processing", # รอตรวจสอบสถานะ
+            "status": "processing",
+            "created_at": datetime.utcnow(),
             "verified_at": None
         }
         mock_transactions[tx_id] = new_tx
         
-        # เชื่อม transaction_id เข้ากับ booking
         booking = mock_bookings.get(booking_id)
         if booking:
             booking["payment_id"] = tx_id
-            booking["status"] = "pending_verification" # อัปเดตสถานะการจอง
+            booking["status"] = "pending_verification"
             
         return new_tx
+
+    @staticmethod
+    def get_pending_transactions() -> List[Dict[str, Any]]:
+        pending = []
+        for tx in mock_transactions.values():
+            if tx.get("status") == "processing":
+                booking = mock_bookings.get(tx["booking_id"])
+                court = mock_courts.get(booking["court_id"]) if booking else None
+                user = mock_users.get(tx["user_id"])
+                
+                pending.append({
+                    "transaction_id": tx["id"],
+                    "user_id": tx["user_id"],
+                    "username": user["username"] if user else "Unknown",
+                    "booking_id": tx["booking_id"],
+                    "court_name": court["court_name"] if court else "Unknown Court",
+                    "booking_date": booking["booking_date"] if booking else "",
+                    "time_slot": booking["time_slot"] if booking else "",
+                    "amount": tx["amount"],
+                    "slip_url": tx["slip_url"],
+                    "status": tx["status"],
+                    "created_at": tx.get("created_at", datetime.utcnow())
+                })
+        return pending
+
+    @staticmethod
+    def get_transaction_by_id(tx_id: str) -> Optional[Dict[str, Any]]:
+        return mock_transactions.get(tx_id)
+
+    @staticmethod
+    def verify_payment(tx_id: str, action: str) -> Optional[Dict[str, Any]]:
+        tx = mock_transactions.get(tx_id)
+        if not tx:
+            return None
+            
+        booking = mock_bookings.get(tx["booking_id"])
+        if action == "approve":
+            tx["status"] = "verified"
+            tx["verified_at"] = datetime.utcnow()
+            if booking:
+                booking["status"] = "confirmed"
+        elif action == "reject":
+            tx["status"] = "failed"
+            if booking:
+                booking["status"] = "payment_rejected"
+                
+        return tx
 
     # 📊 7. Dashboard Stats
     @staticmethod
@@ -247,3 +350,4 @@ class DataService:
             "upcoming_matches_count": len([m for m in mock_matches.values() if m["status"] == "open"]),
             "system_announcement": "ยินดีต้อนรับสู่สนาม Impact Tennis! มีโปรโมชั่นช่วงบ่ายลด 20%"
         }
+

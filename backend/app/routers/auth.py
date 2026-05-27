@@ -2,16 +2,22 @@ import random
 import string
 from fastapi import APIRouter, HTTPException, Depends, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 from typing import Optional, Dict, Any
 
 from app.services.data_service import DataService
-from app.utils import create_access_token, verify_password, decode_access_token
+from app.utils import create_access_token, verify_password, decode_access_token, hash_password
 
 router = APIRouter(prefix="/api/v1/auth", tags=["Authentication"])
 security = HTTPBearer()
 
 # ----------------- Pydantic Request/Response Models -----------------
+
+class RegisterRequest(BaseModel):
+    username: str
+    email: EmailStr
+    password: str = Field(..., min_length=8, description="รหัสผ่านต้องมีความยาวอย่างน้อย 8 ตัวอักษร")
+    phone: str = Field(..., pattern=r"^0\d{9}$", description="เบอร์โทรศัพท์มือถือไทย 10 หลัก (เช่น 0812345678)")
 
 class LoginRequest(BaseModel):
     email: EmailStr
@@ -54,6 +60,45 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(securit
     return user
 
 # ----------------- Route Endpoints -----------------
+
+@router.post("/register", status_code=status.HTTP_201_CREATED)
+def register(payload: RegisterRequest):
+    # ตรวจสอบอีเมลซ้ำ
+    existing_user = DataService.get_user_by_email(payload.email)
+    if existing_user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="อีเมลนี้ถูกใช้งานแล้วในระบบ"
+        )
+    
+    # แฮชรหัสผ่าน
+    pwd_hash = hash_password(payload.password)
+    
+    # สร้างผู้ใช้ใหม่
+    user = DataService.create_user(
+        username=payload.username,
+        email=payload.email,
+        password_hash=pwd_hash,
+        role="player",
+        profile={
+            "phone": payload.phone,
+            "is_phone_verified": False
+        }
+    )
+    
+    # สร้าง JWT Token
+    access_token = create_access_token(data={"sub": user["id"], "role": user["role"]})
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "user": {
+            "id": user["id"],
+            "username": user["username"],
+            "email": user["email"],
+            "role": user["role"],
+            "is_phone_verified": user["profile"]["is_phone_verified"]
+        }
+    }
 
 @router.post("/login")
 def login(payload: LoginRequest):
@@ -121,6 +166,13 @@ def google_login(payload: GoogleLoginRequest):
 
 @router.post("/otp/send")
 def send_otp(payload: OTPSendRequest):
+    # ตรวจสอบ Rate Limit 3 ครั้งใน 15 นาที
+    if not DataService.check_otp_rate_limit(payload.phone):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="ร้องขอ OTP บ่อยเกินไป กรุณารองในอีก 15 นาที"
+        )
+        
     # สุ่มเลข OTP และ Ref Code
     otp_code = "".join(random.choices(string.digits, k=6))
     ref_code = "".join(random.choices(string.ascii_uppercase, k=4))
@@ -141,7 +193,7 @@ def verify_otp(payload: OTPVerifyRequest):
     if not success:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="รหัส OTP หรือ Ref Code ไม่ถูกต้อง หรืออาจจะหมดอายุ"
+            detail="รหัส OTP หรือ Ref Code ไม่ถูกต้อง หรืออาจจะหมดอายุ (จำกัดเวลา 5 นาที)"
         )
     return {
         "status": "success",

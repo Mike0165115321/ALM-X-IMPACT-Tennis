@@ -59,7 +59,7 @@ mock_users: Dict[str, Dict[str, Any]] = {
         "id": USER_ADMIN_ID,
         "username": "admin_impact",
         "email": "admin@impacttennis.com",
-        "password_hash": "$2b$12$EixZaYVK1fsAH1iyxS/ehuM2zL2y10d8v.2gP37o11PZ/P5j1s/0q",
+        "password_hash": "$2b$12$hH20AoWb6Ii7t/da8AWlMenEYMKQYLoXd/fR6lP7IRbXt0TgfmVDq",
         "google_id": None,
         "role": "admin",
         "profile": {
@@ -114,6 +114,16 @@ mock_bookings: Dict[str, Dict[str, Any]] = {
         "status": "confirmed",
         "payment_id": "tx_1",
         "created_at": datetime.utcnow()
+    },
+    "booking_2": {
+        "id": "booking_2",
+        "user_id": USER_2_ID,
+        "court_id": COURT_2_ID,
+        "booking_date": "2026-05-28",
+        "time_slot": "16:00-17:00",
+        "status": "pending_verification",
+        "payment_id": "tx_pending_test",
+        "created_at": datetime.utcnow()
     }
 }
 
@@ -149,11 +159,23 @@ mock_transactions: Dict[str, Dict[str, Any]] = {
     "tx_1": {
         "id": "tx_1",
         "user_id": USER_1_ID,
+        "booking_id": "booking_1",
         "amount": 1000.0,
         "payment_method": "PromptPay",
         "slip_url": "https://storage.googleapis.com/alm-tennis-slips/slip_1.jpg",
         "status": "verified",
         "verified_at": datetime.utcnow()
+    },
+    "tx_pending_test": {
+        "id": "tx_pending_test",
+        "user_id": USER_2_ID,
+        "booking_id": "booking_2",
+        "amount": 350.0,
+        "payment_method": "BankTransfer",
+        "slip_url": "https://storage.googleapis.com/alm-tennis-slips/slip_pending.jpg",
+        "status": "processing",
+        "created_at": datetime.utcnow(),
+        "verified_at": None
     }
 }
 

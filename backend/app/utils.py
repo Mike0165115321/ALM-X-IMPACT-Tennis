@@ -1,11 +1,14 @@
 import jwt
 from datetime import datetime, timedelta
 from typing import Any, Dict, Optional
+# pyrefly: ignore [missing-import]
 from pwdlib import PasswordHash
+# pyrefly: ignore [missing-import]
+from pwdlib.hashers.bcrypt import BcryptHasher
 from app.config import settings
 
 # ใช้ pwdlib[bcrypt] ตามกำหนดในเอกสารโครงการ
-password_hash = PasswordHash.recommended()
+password_hash = PasswordHash([BcryptHasher()])
 
 def hash_password(password: str) -> str:
     return password_hash.hash(password)

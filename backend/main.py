@@ -10,7 +10,7 @@ from app.config import settings
 from app.services.data_service import DataService
 
 # นำเข้า Routers ทั้งหมดที่สร้างขึ้นใหม่
-from app.routers import auth, queues, matching, reviews, payments
+from app.routers import auth, queues, matching, reviews, payments, courts, admin
 
 # ตั้งค่า Logging
 logging.basicConfig(level=logging.INFO)
@@ -37,6 +37,8 @@ app.include_router(queues.router)
 app.include_router(matching.router)
 app.include_router(reviews.router)
 app.include_router(payments.router)
+app.include_router(courts.router)
+app.include_router(admin.router)
 
 # 🚀 ทำงานตอนระบบกำลังเปิดตัว (ข้ามการเชื่อมต่อฐานข้อมูลสำหรับการทดสอบ API หน้าบ้าน)
 @app.on_event("startup")
