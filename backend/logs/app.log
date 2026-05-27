@@ -46,3 +46,11 @@
 [2026-05-27 12:10:01,146] INFO in _client: HTTP Request: POST http://testserver/api/v1/queues/book "HTTP/1.1 403 Forbidden"
 [2026-05-27 12:10:01,336] INFO in _client: HTTP Request: POST http://testserver/api/v1/auth/register "HTTP/1.1 201 Created"
 [2026-05-27 12:10:01,339] INFO in _client: HTTP Request: POST http://testserver/api/v1/payments/pay "HTTP/1.1 400 Bad Request"
+[2026-05-27 12:12:47,434] INFO in server: Shutting down
+[2026-05-27 12:12:47,546] INFO in on: Waiting for application shutdown.
+[2026-05-27 12:12:47,547] INFO in on: Application shutdown complete.
+[2026-05-27 12:12:47,547] INFO in server: Finished server process [3052]
+[2026-05-27 12:12:48,294] INFO in server: Started server process [19080]
+[2026-05-27 12:12:48,295] INFO in on: Waiting for application startup.
+[2026-05-27 12:12:48,295] INFO in main: ⚠️ [API Test Mode] ข้ามการเชื่อมต่อฐานข้อมูล MongoDB ชั่วคราว...
+[2026-05-27 12:12:48,295] INFO in on: Application startup complete.
