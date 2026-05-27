@@ -19,5 +19,6 @@ class Settings:
     SMS_API_KEY: str = os.getenv("SMS_API_KEY", "")
     SMS_API_SECRET: str = os.getenv("SMS_API_SECRET", "")
     SMS_SENDER_NAME: str = os.getenv("SMS_SENDER_NAME", "SMS")
+    SMS_OTP_API_URL: str = os.getenv("SMS_OTP_API_URL", "https://otp.thaibulksms.com/v1/otp")
 
 settings = Settings()

@@ -1,9 +1,13 @@
+import logging
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional
 from app.services.mock_db import (
     mock_users, mock_courts, mock_bookings, mock_matches,
     mock_reviews, mock_transactions, mock_otp_store, generate_id
 )
+
+logger = logging.getLogger("data_service")
+
 
 class DataService:
     # 👥 1. Users Services
@@ -158,7 +162,12 @@ class DataService:
                         mock_otp_store.pop(phone, None)
                         return True
             return False
-        except Exception:
+        except httpx.RequestError as exc:
+            logger.error(f"❌ [Network Error] ไม่สามารถยืนยัน OTP กับ SMS Gateway ได้: {exc}")
+            from app.exceptions import SMSGatewayException
+            raise SMSGatewayException(f"ไม่สามารถเช็คยืนยัน OTP กับระบบภายนอกได้ชั่วคราว: {str(exc)}")
+        except Exception as e:
+            logger.error(f"❌ [System Error] เกิดข้อผิดพลาดในระบบตรวจรหัส OTP: {str(e)}")
             return False
 
     # 📅 3. Bookings Services

@@ -8,6 +8,10 @@ from beanie import init_beanie
 
 from app.config import settings
 from app.services.data_service import DataService
+from app.logger import setup_logging
+
+# เริ่มตั้งค่าระบบ Logging คลุมทั้งแอปพลิเคชัน (ทั้ง Console และบันทึกลงไฟล์)
+setup_logging()
 
 # นำเข้า Routers ทั้งหมดที่สร้างขึ้นใหม่
 from app.routers import auth, queues, matching, reviews, payments, courts, admin

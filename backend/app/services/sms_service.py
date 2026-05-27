@@ -23,9 +23,9 @@ class SMSService:
         if phone.startswith("0"):
             formatted_phone = "66" + phone[1:]
 
-        # สำหรับ OTP API v1 ของ ThaiBulkSMS จะยิงไปที่ https://otp.thaibulksms.com/v1/otp/request
-        # โดยการส่ง Parameter ผ่าน Query String (หรือ URL encoded)
-        api_url = "https://otp.thaibulksms.com/v1/otp/request"
+        # ดึง URL ปลายทางของ API มาจากไฟล์คอนฟิก
+        base_otp_url = settings.SMS_OTP_API_URL
+        api_url = f"{base_otp_url}/request"
         
         params = {
             "key": settings.SMS_API_KEY,
@@ -44,14 +44,10 @@ class SMSService:
                 
                 if response.status_code in [200, 201]:
                     res_data = response.json()
-                    # ตรวจสอบการตอบกลับผิดพลาดของ API ภายใน JSON
                     if res_data.get("status") == "success" or "data" in res_data:
-                        # บันทึก token สำหรับเอาไว้ตรวจสอบการยืนยันภายหลัง
                         token = res_data["data"]["token"]
                         logger.info(f"✅ ส่งคำขอ OTP สำเร็จ! (Token: {token})")
                         
-                        # เพื่อให้ระบบ mock_db สามารถทำต่อระบบตรวจสอบรหัสเองได้แบบอิงจริง
-                        # เราเก็บ token นี้เข้าคู่เบอร์โทรศัพท์ไว้ใน mock_otp_store
                         from app.services.mock_db import mock_otp_store
                         if phone in mock_otp_store:
                             mock_otp_store[phone]["otp_token"] = token
@@ -64,6 +60,10 @@ class SMSService:
                 else:
                     logger.error(f"❌ OTP Gateway ตอบกลับผิดพลาด (HTTP {response.status_code}): {response.text}")
                     return False
+        except httpx.RequestError as exc:
+            logger.error(f"❌ [Network Error] ไม่สามารถเชื่อมต่อกับ SMS Gateway ได้: {exc}")
+            from app.exceptions import SMSGatewayException
+            raise SMSGatewayException(f"เกิดข้อผิดพลาดในการติดต่อกับบริการส่ง SMS ภายนอก: {str(exc)}")
         except Exception as e:
-            logger.error(f"❌ เกิดข้อผิดพลาดขณะยิง OTP API: {str(e)}")
+            logger.error(f"❌ [System Error] เกิดข้อผิดพลาดไม่ทราบสาเหตุขณะยิง OTP API: {str(e)}")
             return False
