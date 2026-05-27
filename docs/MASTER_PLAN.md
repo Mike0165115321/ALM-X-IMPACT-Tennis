@@ -110,7 +110,7 @@
 | # | รายการ | สถานะ | ไฟล์ที่เกี่ยวข้อง | รายละเอียด |
 |---|--------|--------|-------------------|------------|
 | 1 | Endpoint `GET /api/v1/queues` | ✅ | `routers/queues.py` | ดึงรายการจองของตัวเอง / ทั้งหมด (ถ้าเป็น admin) |
-| 2 | Endpoint `POST /api/v1/queues/book` | ✅ | `routers/queues.py` | จองสนาม — ตรวจ OTP verified → ตรวจ court_id ผ่าน `DataService.get_court_by_id()` → ตรวจวันที่ → ตรวจ slot ซ้ำ → ตรวจ user จองซ้ำ → สร้าง booking (status = `pending_payment`) |
+| 2 | Endpoint `POST /api/v1/queues/book` | ✅ | `routers/queues.py`, `docs/WIX_VELO_BOOKING_GUIDE.md` | จองสนาม — ตรวจ OTP verified → ตรวจ court_id ผ่าน `DataService.get_court_by_id()` → ตรวจวันที่ → ตรวจ slot ซ้ำ → ตรวจ user จองซ้ำ → สร้าง booking (status = `pending_payment`) **(มีคู่มือต่อ Wix ละเอียด)** |
 | 3 | Endpoint `PATCH /api/v1/queues/{id}/cancel` | ✅ | `routers/queues.py` | ยกเลิกการจอง — ตรวจเจ้าของ/admin + ตรวจสถานะที่ยกเลิกได้ |
 | 4 | Guard: ต้องยืนยัน OTP ก่อนจอง | ✅ | `routers/queues.py` | ตรวจ `is_phone_verified == True` ก่อนสร้าง booking |
 | 5 | Guard: Slot Conflict (409) | ✅ | `data_service.py` | `is_slot_booked()` ตรวจว่า court+date+slot มีคนจองแล้ว (ไม่นับ cancelled/rejected) |
