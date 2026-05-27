@@ -7,7 +7,10 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from beanie import init_beanie
 
 from app.config import settings
-from app.models import User, Court, Booking, Match, Review, Transaction
+from app.services.data_service import DataService
+
+# นำเข้า Routers ทั้งหมดที่สร้างขึ้นใหม่
+from app.routers import auth, queues, matching, reviews, payments
 
 # ตั้งค่า Logging
 logging.basicConfig(level=logging.INFO)
@@ -28,6 +31,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ลงทะเบียน Routers เข้ากับ App หลัก
+app.include_router(auth.router)
+app.include_router(queues.router)
+app.include_router(matching.router)
+app.include_router(reviews.router)
+app.include_router(payments.router)
+
 # 🚀 ทำงานตอนระบบกำลังเปิดตัว (ข้ามการเชื่อมต่อฐานข้อมูลสำหรับการทดสอบ API หน้าบ้าน)
 @app.on_event("startup")
 async def startup_event():
@@ -42,13 +52,8 @@ def read_root():
         "docs_url": "/docs"
     }
 
-# 📍 API Endpoint ตัวอย่างตามสัญญา API ข้อ 6
+# 📍 API Endpoint ตัวอย่างตามสัญญา API ข้อ 6 (ปรับให้ดึงจาก DataService จำลอง)
 @app.get("/api/v1/data")
 async def get_dashboard_data():
-    # ข้อมูลจำลองตาม API Contract
-    return {
-        "total_active_users": 152,
-        "available_courts_today": 8,
-        "upcoming_matches_count": 14,
-        "system_announcement": "ยินดีต้อนรับสู่สนาม Impact Tennis! มีโปรโมชั่นช่วงบ่ายลด 20%"
-    }
+    return DataService.get_dashboard_stats()
+
