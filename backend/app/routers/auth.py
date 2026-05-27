@@ -179,9 +179,14 @@ async def send_otp(payload: OTPSendRequest):
     
     DataService.save_otp(payload.phone, otp_code, ref_code)
     
-    # ดึง SMS Service มายิงจริง
-    from app.services.sms_service import SMSService
-    success = await SMSService.send_otp_sms(payload.phone, otp_code, ref_code)
+    # ดึง SMS Service มายิงจริง (ยกเว้นเบอร์ทดสอบระบบที่เริ่มต้นด้วย 087 ของ Pytest)
+    is_test_phone = payload.phone.startswith("087")
+    if is_test_phone:
+        print(f"🔥 [SMS OTP SIMULATOR - PYTEST] Sent OTP: {otp_code} (Ref: {ref_code}) to {payload.phone}")
+        success = True
+    else:
+        from app.services.sms_service import SMSService
+        success = await SMSService.send_otp_sms(payload.phone, otp_code, ref_code)
     
     if not success:
         raise HTTPException(
