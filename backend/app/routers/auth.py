@@ -145,7 +145,7 @@ def google_login(payload: GoogleLoginRequest):
             role="player",
             profile={
                 "display_name": "Google SSO Player",
-                "phone": "0811112222",
+                "phone": "0968013963",
                 "is_phone_verified": False,
                 "ntrp_rating": 2.5
             }
@@ -165,7 +165,7 @@ def google_login(payload: GoogleLoginRequest):
     }
 
 @router.post("/otp/send")
-def send_otp(payload: OTPSendRequest):
+async def send_otp(payload: OTPSendRequest):
     # ตรวจสอบ Rate Limit 3 ครั้งใน 15 นาที
     if not DataService.check_otp_rate_limit(payload.phone):
         raise HTTPException(
@@ -179,8 +179,15 @@ def send_otp(payload: OTPSendRequest):
     
     DataService.save_otp(payload.phone, otp_code, ref_code)
     
-    # ส่งข้อความผลลัพธ์ (สามารถจำลองการ print OTP ได้ใน log)
-    print(f"🔥 [SMS OTP SIMULATOR] Sent OTP: {otp_code} (Ref: {ref_code}) to {payload.phone}")
+    # ดึง SMS Service มายิงจริง
+    from app.services.sms_service import SMSService
+    success = await SMSService.send_otp_sms(payload.phone, otp_code, ref_code)
+    
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="ไม่สามารถส่งข้อความ OTP ไปยังเบอร์โทรศัพท์นี้ได้ในขณะนี้"
+        )
     
     return {
         "message": f"OTP sent successfully to {payload.phone}",

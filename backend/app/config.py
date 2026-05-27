@@ -15,4 +15,9 @@ class Settings:
     JWT_ALGORITHM: str = os.getenv("JWT_ALGORITHM", "HS256")
     ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "1440"))
 
+    # SMS Settings
+    SMS_API_KEY: str = os.getenv("SMS_API_KEY", "")
+    SMS_API_SECRET: str = os.getenv("SMS_API_SECRET", "")
+    SMS_SENDER_NAME: str = os.getenv("SMS_SENDER_NAME", "SMS")
+
 settings = Settings()
