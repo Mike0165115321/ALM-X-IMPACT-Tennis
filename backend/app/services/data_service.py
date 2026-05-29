@@ -119,7 +119,7 @@ class DataService:
         from app.config import settings
         from app.services.sms_service import SMSService
         
-        is_test_phone = phone.startswith("087")
+        is_test_phone = settings.ENABLE_OTP_BYPASS and phone.startswith("087")
         
         if not settings.SMS_API_KEY or not settings.SMS_API_SECRET or is_test_phone:
             otp_entry = otp_store.get(phone)

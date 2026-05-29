@@ -146,13 +146,16 @@ def test_upload_invalid_slip_file_type(client):
     })
     
     # ดึงคอร์ทมาจองจริงเพื่อทำการผ่าน booking guard (M6)
-    courts_res = client.get("/api/v1/courts?date=2026-05-31")
+    random_day = random.randint(10, 28)
+    booking_date = f"2026-06-{random_day}"
+    
+    courts_res = client.get(f"/api/v1/courts?date={booking_date}")
     court_id = courts_res.json()[0]["id"]
     
     # จองคอร์ทจริงเพื่อให้ได้ booking_id
     book_res = client.post("/api/v1/queues/book", json={
         "court_id": court_id,
-        "booking_date": "2026-05-31",
+        "booking_date": booking_date,
         "time_slot": "16:00-17:00"
     }, headers=headers)
     booking_id = book_res.json()["booking_id"]

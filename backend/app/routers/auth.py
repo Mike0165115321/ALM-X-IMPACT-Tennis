@@ -182,7 +182,8 @@ async def send_otp(payload: OTPSendRequest):
     await DataService.save_otp(payload.phone, otp_code, ref_code)
     
     # ดึง SMS Service มายิงจริง (ยกเว้นเบอร์ทดสอบระบบที่เริ่มต้นด้วย 087 ของ Pytest)
-    is_test_phone = payload.phone.startswith("087")
+    from app.config import settings
+    is_test_phone = settings.ENABLE_OTP_BYPASS and payload.phone.startswith("087")
     if is_test_phone:
         logger.debug(f"🔥 [SMS OTP SIMULATOR - PYTEST] Sent OTP: {otp_code} (Ref: {ref_code}) to {payload.phone}")
         success = True

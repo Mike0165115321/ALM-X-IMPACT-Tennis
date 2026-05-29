@@ -15,6 +15,12 @@ class Settings:
     JWT_ALGORITHM: str = os.getenv("JWT_ALGORITHM", "HS256")
     ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "1440"))
 
+    # CORS & OTP Bypass Settings
+    CORS_ALLOWED_ORIGINS: list[str] = [
+        origin.strip() for origin in os.getenv("CORS_ALLOWED_ORIGINS", "*").split(",") if origin.strip()
+    ]
+    ENABLE_OTP_BYPASS: bool = os.getenv("ENABLE_OTP_BYPASS", "true").lower() in ("true", "1", "yes")
+
     # SMS Settings
     SMS_API_KEY: str = os.getenv("SMS_API_KEY", "")
     SMS_API_SECRET: str = os.getenv("SMS_API_SECRET", "")

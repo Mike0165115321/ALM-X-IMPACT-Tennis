@@ -144,10 +144,10 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# 🌐 Config CORS (เปิดรับการร้องขอจาก Wix.com ทุกโดเมนเพื่อทดสอบและใช้งาน)
+# 🌐 Config CORS (เปิดรับการร้องขอข้ามโดเมนสำหรับ Wix.com และทดสอบระบบโลคอล)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.CORS_ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
