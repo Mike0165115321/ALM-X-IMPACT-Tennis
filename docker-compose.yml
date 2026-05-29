@@ -1,0 +1,37 @@
+services:
+  # 🗄️ บริการฐานข้อมูล MongoDB
+  mongodb:
+    image: mongo:latest
+    container_name: mongodb-tennis
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db # เก็บบันทึกข้อมูลฐานข้อมูลแบบถาวรในเครื่องโฮสต์
+    networks:
+      - tennis-network
+    restart: always
+
+  # 🐍 บริการระบบหลังบ้าน FastAPI
+  backend:
+    build: ./backend
+    container_name: backend-tennis
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend/uploads:/app/uploads # เมาท์โฟลเดอร์สำหรับเก็บภาพสลิปจริงลงโฮสต์
+    env_file:
+      - ./backend/.env # โหลดตัวแปรสภาพแวดล้อมโดยตรง
+    depends_on:
+      - mongodb # ให้มั่นใจว่าฐานข้อมูลเปิดทำงานก่อนหลังบ้าน
+    networks:
+      - tennis-network
+    restart: always
+
+# 💾 พื้นที่เก็บข้อมูลแบบถาวร
+volumes:
+  mongodb_data:
+
+# 🌐 เครือข่ายแยกอิสระเพื่อความปลอดภัย
+networks:
+  tennis-network:
+    driver: bridge
