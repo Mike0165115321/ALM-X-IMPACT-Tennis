@@ -66,10 +66,18 @@ async def book_court(payload: BookRequest, current_user: Dict[str, Any] = Depend
         time_slot=payload.time_slot
     )
     
+    # 5. ดึงข้อมูลอัตราค่าบริการของสนามและประมวลผลราคาพิเศษตามระดับสมาชิก
+    court = await DataService.get_court_by_id(payload.court_id)
+    base_price = court.get("price_per_hour", 500.0) if court else 500.0
+    discounted_price = await DataService.get_discounted_price_for_user(current_user["id"], base_price)
+    
     return {
         "message": "Booking request created successfully",
         "booking_id": booking["id"],
-        "status": booking["status"]
+        "status": booking["status"],
+        "base_price": base_price,
+        "fee_to_pay": discounted_price,
+        "member_tier": current_user["profile"].get("member_tier", "Standard")
     }
 
 @router.patch("/{booking_id}/cancel")

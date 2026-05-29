@@ -2,7 +2,9 @@ import uuid
 from datetime import datetime, timezone
 from typing import List, Optional
 from pydantic import BaseModel, Field
+# pyrefly: ignore [missing-import]
 from sqlalchemy import Column, String, Float, Integer, DateTime, JSON, UniqueConstraint
+# pyrefly: ignore [missing-import]
 from sqlalchemy.orm import declarative_base
 
 Base = declarative_base()
@@ -23,7 +25,11 @@ class UserProfile(BaseModel):
     birthday: Optional[str] = None # รูปแบบ YYYY-MM-DD
     nationality: Optional[str] = None # "thai", "american", etc.
     vip: bool = False # สถานะ VIP
-    points: int = 0 # คะแนนสะสม
+    points: int = 0 # คะแนนคงเหลือปัจจุบันสำหรับการแลก (เดิม)
+    member_tier: str = "Standard" # "Standard", "Silver", "Gold", "Platinum"
+    accumulated_points: int = 0 # คะแนนสะสมทั้งหมดสำหรับอัปเกรดระดับสมาชิก
+    current_points: int = 0 # คะแนนสะสมคงเหลือปัจจุบัน
+
 
 class AvailableSlot(BaseModel):
     time_slot: str

@@ -91,7 +91,10 @@ class DataService:
             "ntrp_rating": 1.5,
             "wtn_rating": 40.0,
             "playing_style": "All-Court",
-            "match_preference": "any"
+            "match_preference": "any",
+            "member_tier": "Standard",
+            "accumulated_points": 0,
+            "current_points": 0
         }
         if profile:
             default_profile.update(profile)
@@ -110,6 +113,98 @@ class DataService:
             session.add(new_user)
             await session.commit()
             return to_dict(new_user)
+
+    # 🎖️ 1.5 Membership Tier Services
+    @staticmethod
+    async def get_discounted_price_for_user(user_id: str, base_price: float) -> float:
+        """
+        ประเมินและคัดกรองอัตราค่าบริการพิเศษสำหรับลูกค้ารายบุคคลอิงตามสถิติระดับ Tier ของโปรไฟล์
+        - Standard: ส่วนลด 0%
+        - Silver: ส่วนลด 5%
+        - Gold: ส่วนลด 10%
+        - Platinum: ส่วนลด 15%
+        """
+        if not user_id:
+            return base_price
+            
+        async with AsyncSessionLocal() as session:
+            stmt = select(User).where(User.id == str(user_id))
+            res = await session.execute(stmt)
+            user = res.scalars().first()
+            if not user or not user.profile:
+                return base_price
+                
+            tier = user.profile.get("member_tier", "Standard")
+            
+            discount = 0.0
+            if tier == "Silver":
+                discount = 0.05
+            elif tier == "Gold":
+                discount = 0.10
+            elif tier == "Platinum":
+                discount = 0.15
+                
+            discounted = base_price * (1.0 - discount)
+            return round(discounted, 2)
+
+    @staticmethod
+    async def award_points_to_user(user_id: str, paid_amount: float) -> Dict[str, Any]:
+        """
+        ประมวลคะแนนรางวัลสะสมแต้มและปรับเปลี่ยนเลื่อนระดับชั้นของสมาชิกอัตโนมัติ (Auto Tier Promotion)
+        - อัตราปกติ: 10 บาท ได้รับแต้มดิบ 1 แต้ม
+        - ตัวคูณ Multiplier: Standard (1.0x), Silver (1.2x), Gold (1.5x), Platinum (2.0x)
+        - เกณฑ์เลื่อนระดับ: Silver (>=1,000), Gold (>=5,000), Platinum (>=10,000)
+        """
+        if not user_id:
+            raise ValueError("ID ไม่ถูกต้อง")
+            
+        async with AsyncSessionLocal() as session:
+            stmt = select(User).where(User.id == str(user_id))
+            res = await session.execute(stmt)
+            user = res.scalars().first()
+            if not user:
+                raise ValueError("ไม่พบผู้ใช้งาน")
+                
+            profile = dict(user.profile or {})
+            
+            # 1. ค้นหา Multiplier ปัจจุบันของระดับผู้ใช้
+            current_tier = profile.get("member_tier", "Standard")
+            multiplier = 1.0
+            if current_tier == "Silver":
+                multiplier = 1.2
+            elif current_tier == "Gold":
+                multiplier = 1.5
+            elif current_tier == "Platinum":
+                multiplier = 2.0
+                
+            # 2. คำนวณหาแต้มและแต้มคูณ
+            base_points = paid_amount / 10.0
+            earned_points = int(base_points * multiplier)
+            
+            # 3. อัปเดตข้อมูลแต้มในโปรไฟล์
+            accumulated = int(profile.get("accumulated_points", 0)) + earned_points
+            current = int(profile.get("current_points", 0)) + earned_points
+            
+            # 4. ตรวจประเมินปรับเปลี่ยนระดับ Tier อัตโนมัติ (Auto-promotion)
+            new_tier = "Standard"
+            if accumulated >= 10000:
+                new_tier = "Platinum"
+            elif accumulated >= 5000:
+                new_tier = "Gold"
+            elif accumulated >= 1000:
+                new_tier = "Silver"
+                
+            profile["accumulated_points"] = accumulated
+            profile["current_points"] = current
+            profile["member_tier"] = new_tier
+            
+            # คงฟิลด์ points เพื่อความเข้ากันได้ย้อนหลัง
+            profile["points"] = current
+            
+            user.profile = profile
+            await session.commit()
+            return to_dict(user)
+
 
     # 📞 2. SMS OTP Services
     @staticmethod

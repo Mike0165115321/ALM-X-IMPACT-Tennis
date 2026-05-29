@@ -58,6 +58,13 @@ async def verify_payment(
         
     updated_tx = await DataService.verify_payment(transaction_id, payload.action)
     
+    # 🎖️ เมื่อสลิปผ่านการอนุมัติจริง (approve) ให้ทำการให้แต้มสมาชิกและสิทธิพิเศษเพื่อเลื่อน Tier
+    if payload.action == "approve" and updated_tx:
+        user_id = updated_tx.get("user_id")
+        amount = updated_tx.get("amount", 0.0)
+        if user_id and amount > 0:
+            await DataService.award_points_to_user(user_id, amount)
+            
     return {
         "message": f"Payment successfully {payload.action}d",
         "transaction_id": updated_tx["id"],
