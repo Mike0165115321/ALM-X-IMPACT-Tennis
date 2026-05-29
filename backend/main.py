@@ -1,7 +1,9 @@
 import logging
-from fastapi import FastAPI
+from datetime import datetime, timezone
+from contextlib import asynccontextmanager
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
-
 # pyrefly: ignore [missing-import]
 from motor.motor_asyncio import AsyncIOMotorClient
 # pyrefly: ignore [missing-import]
@@ -10,53 +12,23 @@ from beanie import init_beanie
 from app.config import settings
 from app.services.data_service import DataService
 from app.logger import setup_logging
-
-# เริ่มตั้งค่าระบบ Logging คลุมทั้งแอปพลิเคชัน (ทั้ง Console และบันทึกลงไฟล์)
-setup_logging()
-
-# นำเข้า Routers ทั้งหมดที่สร้างขึ้นใหม่
-from app.routers import auth, queues, matching, reviews, payments, courts, admin
-
-# ตั้งค่า Logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("backend")
-
-app = FastAPI(
-    title="ALM-X-IMPACT Tennis API",
-    description="ระบบหลังบ้านจองสนามเทนนิสและหาคู่เล่นระดับอัจฉริยะ (NTRP Matchmaking)",
-    version="1.0.0"
-)
-
+from app.exceptions import ALMException
 from app.services.storage_service import StorageService
 
-# 🌐 Config CORS (เปิดรับการร้องขอจาก Wix.com ทุกโดเมนเพื่อทดสอบและใช้งาน)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# เริ่มตั้งค่าระบบ Logging คลุมทั้งแอปพลิเคชัน (Console และ File)
+setup_logging()
 
-# 📂 เริ่มต้นระบบจัดเก็บไฟล์ผ่าน StorageService (เปลี่ยนพฤติกรรมฝั่งคลาวด์/จำลองในไฟล์โมดูลนั้นได้เลย)
-StorageService.init_app(app)
+# เลือกระดับ logger ของระบบหลังบ้าน
+logger = logging.getLogger("backend")
 
+# นำเข้า Routers ทั้งหมด
+from app.routers import auth, queues, matching, reviews, payments, courts, admin
 
-# ลงทะเบียน Routers เข้ากับ App หลัก
-app.include_router(auth.router)
-app.include_router(queues.router)
-app.include_router(matching.router)
-app.include_router(reviews.router)
-app.include_router(payments.router)
-app.include_router(courts.router)
-app.include_router(admin.router)
-
-from datetime import datetime
-
-# 🚀 ทำงานตอนระบบกำลังเปิดตัว (เชื่อมต่อฐานข้อมูล MongoDB จริง)
-@app.on_event("startup")
-async def startup_event():
-    logger.info("🔌 [MongoDB Mode] กำลังเชื่อมต่อฐานข้อมูล MongoDB...")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # 🔌 [MongoDB Mode] กำลังเชื่อมต่อฐานข้อมูล MongoDB...
+    app.state.db_ready = False
+    logger.info("🔌 กำลังเชื่อมต่อฐานข้อมูล MongoDB...")
     try:
         from app.models import User, Court, Booking, Match, Review, Transaction
         
@@ -66,6 +38,7 @@ async def startup_event():
             document_models=[User, Court, Booking, Match, Review, Transaction]
         )
         logger.info("✅ เชื่อมต่อ MongoDB และ Beanie Models สำเร็จ!")
+        app.state.db_ready = True
         
         # 📂 ระบบ Seeding อัตโนมัติในครั้งแรกที่เปิดเซิร์ฟเวอร์
         user_count = await User.count()
@@ -82,6 +55,7 @@ async def startup_event():
                     seeded_data = json.load(f)
                     
                 users_to_insert = []
+                inserted_emails = set()
                 skipped = 0
                 for u_id, u_data in seeded_data.items():
                     try:
@@ -89,18 +63,33 @@ async def startup_event():
                         try:
                             c_at = datetime.fromisoformat(u_data["created_at"])
                         except Exception:
-                            c_at = datetime.utcnow()
+                            c_at = datetime.now(timezone.utc)
                         
                         # สร้าง User โดยไม่กำหนด id (ให้ MongoDB สร้าง ObjectId เอง)
-                        # เก็บ UUID เดิมไว้ใน profile หรือ field สำรอง
                         profile_data = u_data.get("profile", {})
+                        email_val = u_data.get("email")
+                        if not email_val:
+                            email_val = f"no_email_{u_id}@alm-impact-tennis.com"
+                        
+                        email_lower = email_val.lower().strip()
+                        if email_lower in inserted_emails:
+                            # หากพบอีเมลซ้ำ ให้แปลงให้ไม่ซ้ำเพื่อรองรับ unique index ใน MongoDB
+                            email_lower = f"dup_{u_id[:8]}_{email_lower}"
+                        
+                        inserted_emails.add(email_lower)
+                        
+                        pwd_hash = u_data.get("password_hash")
+                        user_role = u_data.get("role", "player")
+                        if user_role == "admin":
+                            from app.utils import hash_password
+                            pwd_hash = hash_password("securepassword123")
                         
                         user_doc = User(
                             username=u_data["username"],
-                            email=u_data["email"],
-                            password_hash=u_data.get("password_hash"),
+                            email=email_lower,
+                            password_hash=pwd_hash,
                             google_id=u_data.get("google_id"),
-                            role=u_data.get("role", "player"),
+                            role=user_role,
                             profile=profile_data,
                             created_at=c_at
                         )
@@ -145,6 +134,47 @@ async def startup_event():
                 logger.info("🌱 [Database Seed] สร้างสนามสำเร็จ!")
     except Exception as e:
         logger.error(f"❌ [Database Error] ไม่สามารถเชื่อมต่อหรือเริ่มระบบฐานข้อมูลได้: {str(e)}")
+        
+    yield
+
+app = FastAPI(
+    title="ALM-X-IMPACT Tennis API",
+    description="ระบบหลังบ้านจองสนามเทนนิสและหาคู่เล่นระดับอัจฉริยะ (NTRP Matchmaking)",
+    version="1.0.0",
+    lifespan=lifespan
+)
+
+# 🌐 Config CORS (เปิดรับการร้องขอจาก Wix.com ทุกโดเมนเพื่อทดสอบและใช้งาน)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# 📂 เริ่มต้นระบบจัดเก็บไฟล์ผ่าน StorageService (เปลี่ยนพฤติกรรมฝั่งคลาวด์/จำลองในไฟล์โมดูลนั้นได้เลย)
+StorageService.init_app(app)
+
+# ลงทะเบียน Routers เข้ากับ App หลัก
+app.include_router(auth.router)
+app.include_router(queues.router)
+app.include_router(matching.router)
+app.include_router(reviews.router)
+app.include_router(payments.router)
+app.include_router(courts.router)
+app.include_router(admin.router)
+
+# 🛠️ Global Exception Handler สำหรับ ALMException
+@app.exception_handler(ALMException)
+async def alm_exception_handler(request: Request, exc: ALMException):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "status": "error",
+            "message": exc.message
+        }
+    )
 
 # 📍 API Endpoint หน้าโฮม
 @app.get("/")
@@ -155,9 +185,7 @@ def read_root():
         "docs_url": "/docs"
     }
 
-# 📍 API Endpoint ตัวอย่างตามสัญญา API ข้อ 6 (ปรับให้ดึงจาก DataService จำลอง)
+# 📍 API Endpoint ตัวอย่างตามสัญญา API ข้อ 6
 @app.get("/api/v1/data")
 async def get_dashboard_data():
-    return DataService.get_dashboard_stats()
-
-
+    return await DataService.get_dashboard_stats()

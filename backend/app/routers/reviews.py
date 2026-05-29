@@ -17,12 +17,12 @@ class CreateReviewRequest(BaseModel):
 # ----------------- Route Endpoints -----------------
 
 @router.post("/{id}/reviews", status_code=status.HTTP_201_CREATED)
-def submit_review(
+async def submit_review(
     id: str, 
     payload: CreateReviewRequest, 
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
-    review = DataService.create_review(
+    review = await DataService.create_review(
         reviewer_id=current_user["id"],
         match_id=id,
         reviewee_id=payload.reviewee_id,

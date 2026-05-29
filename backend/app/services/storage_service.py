@@ -1,7 +1,8 @@
 import os
 import shutil
 import uuid
-from datetime import datetime
+import asyncio
+from datetime import datetime, timezone
 from fastapi import UploadFile, Request, HTTPException, status
 
 class StorageService:
@@ -26,9 +27,9 @@ class StorageService:
 
     
     @classmethod
-    def upload_slip(cls, slip_file: UploadFile, booking_id: str, request: Request) -> str:
+    async def upload_slip(cls, slip_file: UploadFile, booking_id: str, request: Request) -> str:
         """
-        อัปโหลดภาพสลิปโอนเงิน (จำลองแบบเก็บลงดิสก์เครื่องโลคอล)
+        อัปโหลดภาพสลิปโอนเงิน (จำลองแบบเก็บลงดิสก์เครื่องโลคอล) แบบ Async (C7)
         """
         # 1. ตรวจสอบนามสกุลไฟล์
         if not slip_file.filename.lower().endswith(('.png', '.jpg', '.jpeg', '.webp')):
@@ -42,13 +43,16 @@ class StorageService:
         
         # 3. สร้างชื่อไฟล์ที่ไม่ซ้ำกันเพื่อความปลอดภัยและป้องกันการเขียนทับ
         ext = os.path.splitext(slip_file.filename)[1]
-        unique_filename = f"{booking_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:8]}{ext}"
+        unique_filename = f"{booking_id}_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:8]}{ext}"
         file_path = os.path.join(cls.UPLOAD_DIR, unique_filename)
         
-        # 4. เขียนข้อมูลไฟล์รูปภาพลงในดิสก์ของเครื่องหลังบ้าน
-        try:
+        # 4. เขียนข้อมูลไฟล์รูปภาพลงในดิสก์แบบ Non-blocking IO โดยใช้ asyncio.to_thread() (C7)
+        def save_file():
             with open(file_path, "wb") as buffer:
                 shutil.copyfileobj(slip_file.file, buffer)
+
+        try:
+            await asyncio.to_thread(save_file)
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

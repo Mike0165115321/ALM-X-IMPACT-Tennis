@@ -1,20 +1,33 @@
 import pytest
+import random
 from fastapi.testclient import TestClient
 from main import app
-from app.services.mock_db import mock_users, mock_otp_store
+from app.services.otp_store import otp_store as mock_otp_store
 from app.exceptions import SMSGatewayException, SlotConflictException
 
-client = TestClient(app)
+@pytest.fixture(scope="module")
+def client():
+    with TestClient(app) as c:
+        yield c
+
+def get_unique_user_payload(base_username: str):
+    num = random.randint(1000000, 9999999)
+    return {
+        "username": f"{base_username}_{num}",
+        "email": f"{base_username}_{num}@example.com",
+        "password": "supersecurepassword123",
+        "phone": f"087{num}"
+    }
 
 # ----------------- 👥 Auth Register Edge Cases -----------------
 
-def test_register_duplicate_email():
+def test_register_duplicate_email(client):
     """
     ทดสอบการสมัครสมาชิกซ้ำด้วยอีเมลเดิมที่มีอยู่แล้วในระบบ
     """
     payload = {
         "username": "somchai_dup",
-        "email": "user1@example.com",  # อีเมลที่มีใน Seed Data (somchai)
+        "email": "high_working@hotmail.com",  # อีเมลที่มีใน Seed Data จริง
         "password": "securepassword123",
         "phone": "0811112222"
     }
@@ -22,7 +35,7 @@ def test_register_duplicate_email():
     assert response.status_code == 400
     assert "อีเมลนี้ถูกใช้งานแล้ว" in response.json()["detail"]
 
-def test_register_invalid_password_length():
+def test_register_invalid_password_length(client):
     """
     ทดสอบรหัสผ่านที่สั้นเกินไป (ต่ำกว่า 8 อักษร)
     """
@@ -35,7 +48,7 @@ def test_register_invalid_password_length():
     response = client.post("/api/v1/auth/register", json=payload)
     assert response.status_code == 422  # Validation Error
 
-def test_register_invalid_thai_phone_format():
+def test_register_invalid_thai_phone_format(client):
     """
     ทดสอบกรอกเบอร์โทรศัพท์ผิดฟอร์แมตเบอร์ไทย 10 หลัก
     """
@@ -50,7 +63,7 @@ def test_register_invalid_thai_phone_format():
 
 # ----------------- 📅 Court Available Edge Cases -----------------
 
-def test_list_courts_invalid_date_format():
+def test_list_courts_invalid_date_format(client):
     """
     ทดสอบดึงข้อมูลสนามด้วยรูปแบบวันที่ไม่ถูกต้อง
     """
@@ -60,28 +73,24 @@ def test_list_courts_invalid_date_format():
 
 # ----------------- 📅 Queues & Booking Edge Cases -----------------
 
-def test_book_non_existent_court():
+def test_book_non_existent_court(client):
     """
     ทดสอบจองสนามที่ไม่มีตัวตนจริงในระบบ (Court ID มั่ว)
     """
     # สมัครและยืนยันเบอร์โทรศัพท์เพื่อพร้อมจอง
-    reg_payload = {
-        "username": "no_court_user",
-        "email": "nocourt@example.com",
-        "password": "securepassword123",
-        "phone": "0871112222"
-    }
+    reg_payload = get_unique_user_payload("no_court_user")
+    phone = reg_payload["phone"]
     reg_res = client.post("/api/v1/auth/register", json=reg_payload)
     token = reg_res.json()["access_token"]
     headers = {"Authorization": f"Bearer {token}"}
     
     # ส่งคำขอ OTP ก่อนเพื่อให้ระบบสุ่มรหัสเก็บบันทึกไว้ใน mock_otp_store
-    client.post("/api/v1/auth/otp/send", json={"phone": "0871112222"})
+    client.post("/api/v1/auth/otp/send", json={"phone": phone})
     
     # ยืนยัน OTP จำลองก่อนเพื่อปลดล็อคสิทธิ์จอง
-    otp_entry = mock_otp_store["0871112222"]
+    otp_entry = mock_otp_store[phone]
     client.post("/api/v1/auth/otp/verify", json={
-        "phone": "0871112222",
+        "phone": phone,
         "otp_code": otp_entry["otp_code"],
         "ref_code": otp_entry["ref_code"]
     })
@@ -96,16 +105,11 @@ def test_book_non_existent_court():
     assert response.status_code == 404
     assert "ไม่พบสนามที่ระบุ" in response.json()["detail"]
 
-def test_book_without_otp_verified_phone():
+def test_book_without_otp_verified_phone(client):
     """
     ทดสอบจองคิวสนามโดยที่เบอร์โทรศัพท์ยังไม่ได้กดยืนยัน OTP
     """
-    reg_payload = {
-        "username": "unverified_player",
-        "email": "unverified@example.com",
-        "password": "securepassword123",
-        "phone": "0872223333"
-    }
+    reg_payload = get_unique_user_payload("unverified_player")
     reg_res = client.post("/api/v1/auth/register", json=reg_payload)
     token = reg_res.json()["access_token"]
     headers = {"Authorization": f"Bearer {token}"}
@@ -121,24 +125,41 @@ def test_book_without_otp_verified_phone():
 
 # ----------------- 💳 Payments Slip Edge Cases -----------------
 
-def test_upload_invalid_slip_file_type():
+def test_upload_invalid_slip_file_type(client):
     """
     ทดสอบอัปโหลดไฟล์สลิปชำระเงินที่นามสกุลไม่ใช่รูปภาพ (เช่น ไฟล์ .pdf)
     """
     # สมัครสมาชิก
-    reg_payload = {
-        "username": "pdf_uploader",
-        "email": "pdf@example.com",
-        "password": "securepassword123",
-        "phone": "0873334444"
-    }
+    reg_payload = get_unique_user_payload("pdf_uploader")
+    phone = reg_payload["phone"]
     reg_res = client.post("/api/v1/auth/register", json=reg_payload)
     token = reg_res.json()["access_token"]
     headers = {"Authorization": f"Bearer {token}"}
     
+    # ยืนยัน OTP จำลองก่อนเพื่อปลดล็อคสิทธิ์จอง
+    client.post("/api/v1/auth/otp/send", json={"phone": phone})
+    otp_entry = mock_otp_store[phone]
+    client.post("/api/v1/auth/otp/verify", json={
+        "phone": phone,
+        "otp_code": otp_entry["otp_code"],
+        "ref_code": otp_entry["ref_code"]
+    })
+    
+    # ดึงคอร์ทมาจองจริงเพื่อทำการผ่าน booking guard (M6)
+    courts_res = client.get("/api/v1/courts?date=2026-05-31")
+    court_id = courts_res.json()[0]["id"]
+    
+    # จองคอร์ทจริงเพื่อให้ได้ booking_id
+    book_res = client.post("/api/v1/queues/book", json={
+        "court_id": court_id,
+        "booking_date": "2026-05-31",
+        "time_slot": "16:00-17:00"
+    }, headers=headers)
+    booking_id = book_res.json()["booking_id"]
+    
     file_content = b"fake-pdf-content"
     files = {"slip_file": ("slip.pdf", file_content, "application/pdf")}
-    form_data = {"booking_id": "booking_1", "amount": 500.0}
+    form_data = {"booking_id": booking_id, "amount": 500.0}
     
     response = client.post("/api/v1/payments/pay", data=form_data, files=files, headers=headers)
     assert response.status_code == 400

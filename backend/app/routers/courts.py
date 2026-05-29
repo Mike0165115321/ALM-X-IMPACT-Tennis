@@ -1,15 +1,15 @@
 from fastapi import APIRouter, Query, HTTPException, status
 from typing import List, Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
 
 from app.services.data_service import DataService
 
 router = APIRouter(prefix="/api/v1/courts", tags=["Courts"])
 
 @router.get("")
-def list_courts(date: str = Query(None, description="วันที่ต้องการจอง ฟอร์แมต YYYY-MM-DD (เช่น 2026-05-27) ค่าเริ่มต้นคือวันนี้")):
+async def list_courts(date: str = Query(None, description="วันที่ต้องการจอง ฟอร์แมต YYYY-MM-DD (เช่น 2026-05-27) ค่าเริ่มต้นคือวันนี้")):
     if not date:
-        date = datetime.utcnow().strftime("%Y-%m-%d")
+        date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         
     try:
         # ตรวจสอบฟอร์แมตวันที่เบื้องต้น
@@ -21,8 +21,8 @@ def list_courts(date: str = Query(None, description="วันที่ต้อ
         )
         
     result = []
-    # ดึงข้อมูลสนามผ่านชั้น DataService เท่านั้น ไม่ดึงจากฐานข้อมูลจำลองโดยตรง
-    courts = DataService.get_all_courts()
+    # ดึงข้อมูลสนามผ่านชั้น DataService
+    courts = await DataService.get_all_courts()
     
     for court in courts:
         court_id = court["id"]
@@ -38,7 +38,7 @@ def list_courts(date: str = Query(None, description="วันที่ต้อ
         for slot in court["available_slots"]:
             time_slot = slot["time_slot"]
             # ตรวจสอบว่าในวันที่กำหนด มีคนจองและยืนยัน/อยู่ระหว่างดำเนินการในระบบแล้วหรือไม่
-            is_booked = DataService.is_slot_booked(court_id, date, time_slot)
+            is_booked = await DataService.is_slot_booked(court_id, date, time_slot)
             
             court_copy["available_slots"].append({
                 "time_slot": time_slot,
@@ -48,4 +48,3 @@ def list_courts(date: str = Query(None, description="วันที่ต้อ
         result.append(court_copy)
         
     return result
-

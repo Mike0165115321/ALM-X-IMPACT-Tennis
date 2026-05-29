@@ -5,6 +5,7 @@ from datetime import datetime
 
 from app.services.data_service import DataService
 from app.routers.auth import get_current_user
+from app.exceptions import SlotConflictException, UserDuplicateBookingException
 
 router = APIRouter(prefix="/api/v1/queues", tags=["Queue & Booking"])
 
@@ -18,15 +19,15 @@ class BookRequest(BaseModel):
 # ----------------- Route Endpoints -----------------
 
 @router.get("")
-def get_queues(current_user: Dict[str, Any] = Depends(get_current_user)):
+async def get_queues(current_user: Dict[str, Any] = Depends(get_current_user)):
     # ถ้าเป็น admin ให้แสดงข้อมูลทั้งหมด ถ้าเป็นผู้เล่นทั่วไป ให้แสดงเฉพาะคิวของตัวเอง
     if current_user["role"] == "admin":
-        return DataService.get_all_bookings()
+        return await DataService.get_all_bookings()
     else:
-        return DataService.get_bookings_by_user(current_user["id"])
+        return await DataService.get_bookings_by_user(current_user["id"])
 
 @router.post("/book", status_code=status.HTTP_201_CREATED)
-def book_court(payload: BookRequest, current_user: Dict[str, Any] = Depends(get_current_user)):
+async def book_court(payload: BookRequest, current_user: Dict[str, Any] = Depends(get_current_user)):
     # ตรวจสอบเบอร์โทรศัพท์ว่าทำการยืนยันตัวตน OTP หรือยัง ตามความปลอดภัย
     if not current_user["profile"]["is_phone_verified"]:
         raise HTTPException(
@@ -35,7 +36,7 @@ def book_court(payload: BookRequest, current_user: Dict[str, Any] = Depends(get_
         )
         
     # 1. ตรวจสอบว่ามีสนามนี้ในระบบจริงหรือไม่ ผ่าน DataService เท่านั้น
-    if not DataService.get_court_by_id(payload.court_id):
+    if not await DataService.get_court_by_id(payload.court_id):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="ไม่พบสนามที่ระบุในระบบ"
@@ -51,20 +52,14 @@ def book_court(payload: BookRequest, current_user: Dict[str, Any] = Depends(get_
         )
 
     # 3. ตรวจสอบว่าเวลานี้ถูกจองไปแล้วหรือยัง (Slot Conflict Guard)
-    if DataService.is_slot_booked(payload.court_id, payload.booking_date, payload.time_slot):
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="สล็อตเวลานี้ในสนามดังกล่าวถูกจองเต็มแล้ว"
-        )
+    if await DataService.is_slot_booked(payload.court_id, payload.booking_date, payload.time_slot):
+        raise SlotConflictException()
         
     # 4. ตรวจสอบว่าผู้ใช้คนนี้จองสล็อตนี้ซ้ำไปแล้วหรือยัง (Duplicate Booking Guard)
-    if DataService.has_user_booked_slot(current_user["id"], payload.booking_date, payload.time_slot):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="คุณจองสนามในสล็อตเวลานี้ไปแล้ว"
-        )
+    if await DataService.has_user_booked_slot(current_user["id"], payload.booking_date, payload.time_slot):
+        raise UserDuplicateBookingException()
         
-    booking = DataService.create_booking(
+    booking = await DataService.create_booking(
         user_id=current_user["id"],
         court_id=payload.court_id,
         booking_date=payload.booking_date,
@@ -78,8 +73,8 @@ def book_court(payload: BookRequest, current_user: Dict[str, Any] = Depends(get_
     }
 
 @router.patch("/{booking_id}/cancel")
-def cancel_booking(booking_id: str, current_user: Dict[str, Any] = Depends(get_current_user)):
-    booking = DataService.get_booking_by_id(booking_id)
+async def cancel_booking(booking_id: str, current_user: Dict[str, Any] = Depends(get_current_user)):
+    booking = await DataService.get_booking_by_id(booking_id)
     if not booking:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -100,7 +95,7 @@ def cancel_booking(booking_id: str, current_user: Dict[str, Any] = Depends(get_c
             detail=f"ไม่สามารถยกเลิกการจองที่มีสถานะ {booking['status']} ได้"
         )
         
-    updated_booking = DataService.cancel_booking(booking_id)
+    updated_booking = await DataService.cancel_booking(booking_id)
     return {
         "message": "Booking cancelled successfully",
         "booking_id": updated_booking["id"],

@@ -1,21 +1,30 @@
 import pytest
+import random
 from fastapi.testclient import TestClient
 from main import app
-from app.services.mock_db import mock_users, mock_otp_store, mock_bookings, mock_transactions
+from app.services.otp_store import otp_store as mock_otp_store
 
-client = TestClient(app)
+@pytest.fixture(scope="module")
+def client():
+    with TestClient(app) as c:
+        yield c
 
-def test_full_player_workflow():
-    # 1. 👥 POST /auth/register
-    email = "test_player@example.com"
-    register_payload = {
-        "username": "test_player",
-        "email": email,
+def get_unique_user_payload(base_username: str):
+    num = random.randint(1000000, 9999999)
+    return {
+        "username": f"{base_username}_{num}",
+        "email": f"{base_username}_{num}@example.com",
         "password": "supersecurepassword123",
-        "phone": "0877777777"
+        "phone": f"087{num}"
     }
+
+def test_full_player_workflow(client):
+    # 1. 👥 POST /auth/register
+    payload = get_unique_user_payload("test_player")
+    email = payload["email"]
+    phone = payload["phone"]
     
-    response = client.post("/api/v1/auth/register", json=register_payload)
+    response = client.post("/api/v1/auth/register", json=payload)
     assert response.status_code == 201
     data = response.json()
     assert "access_token" in data
@@ -26,26 +35,29 @@ def test_full_player_workflow():
     headers = {"Authorization": f"Bearer {token}"}
     
     # 2. 📞 POST /auth/otp/send
-    otp_response = client.post("/api/v1/auth/otp/send", json={"phone": "0877777777"})
+    otp_response = client.post("/api/v1/auth/otp/send", json={"phone": phone})
     assert otp_response.status_code == 200
     otp_data = otp_response.json()
     assert "ref_code" in otp_data
     
     # Fetch generated OTP from simulator mock_otp_store
-    otp_entry = mock_otp_store["0877777777"]
+    otp_entry = mock_otp_store[phone]
     otp_code = otp_entry["otp_code"]
     ref_code = otp_entry["ref_code"]
     
     # 📞 POST /auth/otp/verify
     verify_response = client.post("/api/v1/auth/otp/verify", json={
-        "phone": "0877777777",
+        "phone": phone,
         "otp_code": otp_code,
         "ref_code": ref_code
     })
     assert verify_response.status_code == 200
     
-    # 3. 📅 GET /courts
-    courts_response = client.get("/api/v1/courts?date=2026-05-30")
+    # 3. 📅 GET /courts with randomized booking date to prevent 409 slot conflict across test runs
+    random_day = random.randint(10, 28)
+    booking_date = f"2026-06-{random_day}"
+    
+    courts_response = client.get(f"/api/v1/courts?date={booking_date}")
     assert courts_response.status_code == 200
     courts_data = courts_response.json()
     assert len(courts_data) >= 2
@@ -54,7 +66,7 @@ def test_full_player_workflow():
     # 4. 📅 POST /queues/book
     booking_payload = {
         "court_id": court_1_id,
-        "booking_date": "2026-05-30",
+        "booking_date": booking_date,
         "time_slot": "16:00-17:00"
     }
     book_response = client.post("/api/v1/queues/book", json=booking_payload, headers=headers)
@@ -82,7 +94,7 @@ def test_full_player_workflow():
     # 6. 👑 Admin: GET /admin/payments/pending
     # First, authenticate as Admin
     admin_login = {
-        "email": "admin@impacttennis.com",
+        "email": "managingdirector@kfd.co.th",
         "password": "securepassword123"
     }
     admin_auth = client.post("/api/v1/auth/login", json=admin_login)

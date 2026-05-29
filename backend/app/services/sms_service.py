@@ -48,9 +48,9 @@ class SMSService:
                         token = res_data["data"]["token"]
                         logger.info(f"✅ ส่งคำขอ OTP สำเร็จ! (Token: {token})")
                         
-                        from app.services.mock_db import mock_otp_store
-                        if phone in mock_otp_store:
-                            mock_otp_store[phone]["otp_token"] = token
+                        from app.services.otp_store import otp_store
+                        if phone in otp_store:
+                            otp_store[phone]["otp_token"] = token
                             
                         return True
                     else:
@@ -67,3 +67,40 @@ class SMSService:
         except Exception as e:
             logger.error(f"❌ [System Error] เกิดข้อผิดพลาดไม่ทราบสาเหตุขณะยิง OTP API: {str(e)}")
             return False
+
+    @staticmethod
+    async def verify_otp_via_api(phone: str, otp_code: str, otp_token: str) -> bool:
+        """
+        ตรวจสอบความถูกต้องของ OTP ผ่าน API ThaiBulkSMS จริง (Async)
+        """
+        api_url = "https://otp.thaibulksms.com/v1/otp/verify"
+        
+        params = {
+            "key": settings.SMS_API_KEY,
+            "secret": settings.SMS_API_SECRET,
+            "token": otp_token,
+            "pin": otp_code
+        }
+
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    api_url,
+                    params=params,
+                    timeout=10.0
+                )
+                
+                if response.status_code in [200, 201]:
+                    res_data = response.json()
+                    # หากตอบกลับเป็น success หรือ status 'success' ยืนยันตัวตนสำเร็จ
+                    if res_data.get("status") == "success" or res_data.get("data", {}).get("status") == "success":
+                        return True
+            return False
+        except httpx.RequestError as exc:
+            logger.error(f"❌ [Network Error] ไม่สามารถยืนยัน OTP กับ SMS Gateway ได้: {exc}")
+            from app.exceptions import SMSGatewayException
+            raise SMSGatewayException(f"ไม่สามารถเช็คยืนยัน OTP กับระบบภายนอกได้ชั่วคราว: {str(exc)}")
+        except Exception as e:
+            logger.error(f"❌ [System Error] เกิดข้อผิดพลาดในระบบตรวจรหัส OTP: {str(e)}")
+            return False
+

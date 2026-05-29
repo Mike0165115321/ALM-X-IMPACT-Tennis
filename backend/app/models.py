@@ -1,8 +1,10 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional
 from pydantic import BaseModel, Field
 # pyrefly: ignore [missing-import]
 from beanie import Document, PydanticObjectId
+# pyrefly: ignore [missing-import]
+from pymongo import IndexModel, ASCENDING
 
 # ----------------- Sub-Models -----------------
 
@@ -35,10 +37,13 @@ class User(Document):
     google_id: Optional[str] = None # สำหรับล็อกอินด้วย Google SSO
     role: str = "player" # "player", "admin", "court_owner"
     profile: UserProfile
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     class Settings:
         name = "users" # ชื่อคอลเลกชันใน MongoDB
+        indexes = [
+            IndexModel([("email", ASCENDING)], unique=True),
+        ]
 
 class Court(Document):
     court_name: str
@@ -56,10 +61,14 @@ class Booking(Document):
     time_slot: str # เช่น "18:00-20:00"
     status: str = "pending" # "pending", "confirmed", "cancelled"
     payment_id: Optional[PydanticObjectId] = None # อ้างอิงไปยัง Transaction
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     class Settings:
         name = "bookings"
+        indexes = [
+            IndexModel([("court_id", ASCENDING), ("booking_date", ASCENDING), ("time_slot", ASCENDING)]),
+            IndexModel([("user_id", ASCENDING)]),
+        ]
 
 class Match(Document):
     host_user_id: PydanticObjectId # ผู้สร้างแมตช์
@@ -71,7 +80,7 @@ class Match(Document):
     ntrp_min: float = 1.5
     ntrp_max: float = 7.0
     status: str = "open" # "open", "matched", "cancelled"
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     class Settings:
         name = "matches"
@@ -82,18 +91,23 @@ class Review(Document):
     match_id: PydanticObjectId # ไอดีแมตช์ที่เกี่ยวเนื่อง
     rating: int = Field(default=5, ge=1, le=5) # 1 - 5 ดาว
     comment: str
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     class Settings:
         name = "reviews"
 
 class Transaction(Document):
     user_id: PydanticObjectId
+    booking_id: PydanticObjectId # อ้างอิงไปยัง Booking
     amount: float
     payment_method: str # "PromptPay", "BankTransfer"
     slip_url: str # ที่อยู่ภาพสลิปที่เก็บไว้
     status: str = "pending" # "pending", "verified", "failed"
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     verified_at: Optional[datetime] = None
 
     class Settings:
         name = "transactions"
+        indexes = [
+            IndexModel([("status", ASCENDING)]),
+        ]

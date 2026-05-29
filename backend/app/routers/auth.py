@@ -1,5 +1,6 @@
 import random
 import string
+import logging
 from fastapi import APIRouter, HTTPException, Depends, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, EmailStr, Field
@@ -10,6 +11,7 @@ from app.utils import create_access_token, verify_password, decode_access_token,
 
 router = APIRouter(prefix="/api/v1/auth", tags=["Authentication"])
 security = HTTPBearer()
+logger = logging.getLogger("auth")
 
 # ----------------- Pydantic Request/Response Models -----------------
 
@@ -36,7 +38,7 @@ class OTPVerifyRequest(BaseModel):
 
 # ----------------- Auth Helpers & Dependencies -----------------
 
-def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> Dict[str, Any]:
+async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> Dict[str, Any]:
     token = credentials.credentials
     payload = decode_access_token(token)
     if not payload:
@@ -51,7 +53,7 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(securit
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="ข้อมูลโทเค็นไม่สมบูรณ์",
         )
-    user = DataService.get_user_by_id(user_id)
+    user = await DataService.get_user_by_id(user_id)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -62,9 +64,9 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(securit
 # ----------------- Route Endpoints -----------------
 
 @router.post("/register", status_code=status.HTTP_201_CREATED)
-def register(payload: RegisterRequest):
+async def register(payload: RegisterRequest):
     # ตรวจสอบอีเมลซ้ำ
-    existing_user = DataService.get_user_by_email(payload.email)
+    existing_user = await DataService.get_user_by_email(payload.email)
     if existing_user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -75,7 +77,7 @@ def register(payload: RegisterRequest):
     pwd_hash = hash_password(payload.password)
     
     # สร้างผู้ใช้ใหม่
-    user = DataService.create_user(
+    user = await DataService.create_user(
         username=payload.username,
         email=payload.email,
         password_hash=pwd_hash,
@@ -101,8 +103,8 @@ def register(payload: RegisterRequest):
     }
 
 @router.post("/login")
-def login(payload: LoginRequest):
-    user = DataService.get_user_by_email(payload.email)
+async def login(payload: LoginRequest):
+    user = await DataService.get_user_by_email(payload.email)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -129,16 +131,16 @@ def login(payload: LoginRequest):
     }
 
 @router.post("/google")
-def google_login(payload: GoogleLoginRequest):
+async def google_login(payload: GoogleLoginRequest):
     # ในการทดสอบ Mock เราจะจำลองการถอดรหัส Google Token
     # หากเป็นโทเค็นจำลอง เราจะสร้าง/ดึงข้อมูลจำลอง
     email = "google_user@gmail.com"
     username = "tennis_player_sso"
     google_id = "google_sso_123456789"
     
-    user = DataService.get_user_by_google_id(google_id)
+    user = await DataService.get_user_by_google_id(google_id)
     if not user:
-        user = DataService.create_user(
+        user = await DataService.create_user(
             username=username,
             email=email,
             google_id=google_id,
@@ -167,7 +169,7 @@ def google_login(payload: GoogleLoginRequest):
 @router.post("/otp/send")
 async def send_otp(payload: OTPSendRequest):
     # ตรวจสอบ Rate Limit 3 ครั้งใน 15 นาที
-    if not DataService.check_otp_rate_limit(payload.phone):
+    if not await DataService.check_otp_rate_limit(payload.phone):
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="ร้องขอ OTP บ่อยเกินไป กรุณารองในอีก 15 นาที"
@@ -177,12 +179,12 @@ async def send_otp(payload: OTPSendRequest):
     otp_code = "".join(random.choices(string.digits, k=6))
     ref_code = "".join(random.choices(string.ascii_uppercase, k=4))
     
-    DataService.save_otp(payload.phone, otp_code, ref_code)
+    await DataService.save_otp(payload.phone, otp_code, ref_code)
     
     # ดึง SMS Service มายิงจริง (ยกเว้นเบอร์ทดสอบระบบที่เริ่มต้นด้วย 087 ของ Pytest)
     is_test_phone = payload.phone.startswith("087")
     if is_test_phone:
-        print(f"🔥 [SMS OTP SIMULATOR - PYTEST] Sent OTP: {otp_code} (Ref: {ref_code}) to {payload.phone}")
+        logger.debug(f"🔥 [SMS OTP SIMULATOR - PYTEST] Sent OTP: {otp_code} (Ref: {ref_code}) to {payload.phone}")
         success = True
     else:
         from app.services.sms_service import SMSService
@@ -200,8 +202,8 @@ async def send_otp(payload: OTPSendRequest):
     }
 
 @router.post("/otp/verify")
-def verify_otp(payload: OTPVerifyRequest):
-    success = DataService.verify_otp(payload.phone, payload.otp_code, payload.ref_code)
+async def verify_otp(payload: OTPVerifyRequest):
+    success = await DataService.verify_otp(payload.phone, payload.otp_code, payload.ref_code)
     if not success:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

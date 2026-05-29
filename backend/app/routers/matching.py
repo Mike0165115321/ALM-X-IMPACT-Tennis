@@ -21,9 +21,9 @@ class FindMatchRequest(BaseModel):
 # ----------------- Route Endpoints -----------------
 
 @router.post("/find")
-def find_matching(payload: FindMatchRequest, current_user: Dict[str, Any] = Depends(get_current_user)):
+async def find_matching(payload: FindMatchRequest, current_user: Dict[str, Any] = Depends(get_current_user)):
     # 1. ค้นหาผู้เล่นแมตช์ที่เข้าเกณฑ์ตามสไตล์ NTRP และความต้องการ
-    compatible_players = DataService.find_matches(
+    compatible_players = await DataService.find_matches(
         court_id=payload.court_id,
         match_date=payload.match_date,
         time_slot=payload.time_slot,
@@ -34,7 +34,7 @@ def find_matching(payload: FindMatchRequest, current_user: Dict[str, Any] = Depe
     )
     
     # 2. สร้าง/ประกาศโพสต์สำหรับแมตช์นี้ในระบบหาคู่เล่นเพื่อรอคนอื่นเข้ามาร่วม
-    new_match = DataService.create_match_post(
+    new_match = await DataService.create_match_post(
         host_user_id=current_user["id"],
         court_id=payload.court_id,
         match_date=payload.match_date,

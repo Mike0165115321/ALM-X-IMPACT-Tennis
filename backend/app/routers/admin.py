@@ -15,7 +15,7 @@ class VerifyPaymentRequest(BaseModel):
 
 # ----------------- Helper Role Guard -----------------
 
-def require_admin(current_user: Dict[str, Any] = Depends(get_current_user)) -> Dict[str, Any]:
+async def require_admin(current_user: Dict[str, Any] = Depends(get_current_user)) -> Dict[str, Any]:
     if current_user["role"] != "admin":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -26,14 +26,14 @@ def require_admin(current_user: Dict[str, Any] = Depends(get_current_user)) -> D
 # ----------------- Route Endpoints -----------------
 
 @router.get("/payments/pending", response_model=List[Dict[str, Any]])
-def list_pending_payments(admin_user: Dict[str, Any] = Depends(require_admin)):
+async def list_pending_payments(admin_user: Dict[str, Any] = Depends(require_admin)):
     """
     ดึงรายการสลิปชำระเงินทั้งหมดที่รอการตรวจสอบ (status = 'processing')
     """
-    return DataService.get_pending_transactions()
+    return await DataService.get_pending_transactions()
 
 @router.patch("/payments/{transaction_id}/verify")
-def verify_payment(
+async def verify_payment(
     transaction_id: str,
     payload: VerifyPaymentRequest,
     admin_user: Dict[str, Any] = Depends(require_admin)
@@ -49,14 +49,14 @@ def verify_payment(
             detail="การดำเนินการไม่ถูกต้อง ต้องระบุเป็น 'approve' หรือ 'reject'"
         )
         
-    tx = DataService.get_transaction_by_id(transaction_id)
+    tx = await DataService.get_transaction_by_id(transaction_id)
     if not tx:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="ไม่พบธุรกรรมหรือสลิปชำระเงินที่ระบุในระบบ"
         )
         
-    updated_tx = DataService.verify_payment(transaction_id, payload.action)
+    updated_tx = await DataService.verify_payment(transaction_id, payload.action)
     
     return {
         "message": f"Payment successfully {payload.action}d",
