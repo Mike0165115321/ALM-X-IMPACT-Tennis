@@ -1,5 +1,9 @@
 # 🧭 Comprehensive Integration Guide: Frontend (Wix) & Backend (FastAPI)
 
+> [!IMPORTANT]
+> **CRITICAL RULE FOR AGENTS / DEVELOPERS:**
+> ทุกครั้งที่เริ่มต้นทำงาน ให้เปิดอ่านและตรวจสอบเอกสาร [ALM X IMPACT Tennis.md](file:///c:/GitHub/ALM-X-IMPACT-Tennis/docs/ALM%20X%20IMPACT%20Tennis.md) เป็นหลักเสมอ เพื่อยึดมั่นขอบเขตและข้อตกลงในการส่งมอบงาน 100% ห้ามรื้อตรรกะระบบที่ตกลงกันไว้โดยไม่จำเป็น
+
 This document ensures that the project team and stakeholders share a unified understanding of the data flow and relationship between the frontend (Wix.com) and the backend (Python FastAPI).
 
 ---
@@ -41,21 +45,30 @@ Clear boundaries prevent overlap and confusion between the frontend team (Wix.co
 
 ---
 
-## 📅 3. Phased Implementation Timeline (Prioritized)
+## 📅 3. Phased Implementation Timeline (Strictly aligned with ALM X IMPACT Tennis.md)
 
-To launch the project as efficiently as possible, we have split the features into two distinct phases. **We are prioritizing the court booking system so players can book courts immediately.**
+ขอบเขตสัญญางานผลิตแบ่งออกเป็น 3 เฟสอย่างเป็นทางการ โดยยึดถือสัญญาส่งมอบหลักเป็นหลัก:
 
-### 🏆 Phase 1: Core Court Booking MVP (Current Priority)
-*   **User Phone Verification:** SMS OTP verification flow to verify player identity and prevent spam bookings.
-*   **Court Directory & Status:** Fetch court directory and show real-time slot availability.
-*   **Booking Creation:** Allow users to book specific court slots (`POST /api/v1/queues/book`).
-*   **Manual Slip Upload Payment:** Allow players to upload bank transfer slip images to pay for bookings, updating status to `pending_verification`.
+### 🏆 Phase 1: ระบบจองคอร์ด และ ระบบจับคู่ผู้เล่น (Core Deliverables)
+*   **ระบบจองคอร์ด (Court Booking System):**
+    *   **Court Directory & Status:** ค้นหาคอร์ทและดึงเวลาที่ว่างแบบเรียลไทม์
+    *   **Booking Creation & Verification:** จองคอร์ท เลือกเวลา และส่งสลิปชำระเงินแบบโอนธนาคาร (Manual Verify)
+    *   **SMS OTP Verification:** ยืนยันตัวตนผ่านเบอร์มือถือเพื่อป้องกันการจองสแปม
+*   **ระบบจับคู่ผู้เล่น (Player Matchmaking - NTRP & UGC):**
+    *   **Google OAuth SSO:** ล็อกอินและสมัครผ่าน Google Account เพื่อสร้างประวัติผู้เล่นสากล
+    *   **NTRP Matchmaking Algorithm:** สร้าง/ค้นหาห้องจับคู่เล่นเทนนิส คัดกรองตามระดับฝีมือ NTRP 1.5 - 7.0
+    *   **Post-Match User Reviews (UGC Loop):** การให้ดาวและรีวิวประเมินผู้เล่น เพื่อสะสมและแสดงเรตติ้งในสังคมผู้ใช้
 
-### 🥈 Phase 2: Social Matchmaking & Advanced Features (Next Step)
-*   **Google OAuth SSO:** Social sign-in integration to establish global player profiles.
-*   **NTRP Matchmaking Algorithm:** Matchmaking system based on tennis ratings (NTRP 1.5 - 7.0) to open public matches and search compatible partners.
-*   **Post-Match User Reviews (UGC Loop):** Submitting ratings and comments for match partners to maintain community standard.
-*   **Auto Slip Verification:** Banking OCR/API integration to automatically scan QR codes on slips and approve bookings instantly.
+### 🥈 Phase 2: ระบบสมาชิก และ จองโค้ช (Advanced Deliverables)
+*   **ระบบจองโค้ช (Coach Booking System):** ค้นหาและทำนัดคิวสอนของผู้ฝึกสอนเทนนิสผ่านปฏิทินออนไลน์
+*   **ระบบสิทธิ์สมาชิกและสิทธิพิเศษ (Member Tier / Privilege):** การจัดกลุ่มสมาชิกตามสถิติความเคลื่อนไหว
+*   **ระบบราคาสมาชิก (Member Pricing):** ราคาลดหย่อนตามระดับกลุ่มลูกค้าพิเศษ
+*   **ระบบรายงานประวัติการเล่น (User Activity Reports):** รายงานความคืบหน้าเชิงสถิติและการประเมิน NTRP ระยะยาว
+
+### 🛍️ Phase 3: ระบบ Marketplace สำหรับขายสินค้า/Voucher
+*   **ระบบร้านค้า (Storefront):** การสั่งซื้อสินค้าและของที่ระลึกในสนาม (น้ำดื่ม, ลูกเทนนิส, ไม้เช่า)
+*   **ระบบ Voucher Redeem:** ระบบคูปองส่วนลดและการกรอกรหัสโปรโมชั่นหักลดราคาสนาม
+*   **Service Marketplace:** บริการพิเศษ เช่น การจองคู่ซ้อมหรือคู่ตีมืออาชีพ (Knocker/Hitting partner)
 
 ---
 
@@ -66,9 +79,9 @@ To launch the project as efficiently as possible, we have split the features int
 
 ### 📡 Active API Endpoints for Wix Integration
 
-#### 🔐 Authentication & Verification System (Phase 1 & 2)
+#### 🔐 Authentication & Verification System (Phase 1)
 *   `POST /api/v1/auth/login` (Standard Email/Password authentication)
-*   `POST /api/v1/auth/google` (Google SSO authentication - *Phase 2*)
+*   `POST /api/v1/auth/google` (Google SSO authentication - *Phase 1*)
 *   `POST /api/v1/auth/otp/send` (Triggers SMS gateway OTP generation - *Phase 1*)
 *   `POST /api/v1/auth/otp/verify` (Validates OTP to confirm and unlock phone number - *Phase 1*)
 
@@ -76,11 +89,11 @@ To launch the project as efficiently as possible, we have split the features int
 *   `GET /api/v1/queues` (Fetches user-specific bookings, or all bookings for Admin)
 *   `POST /api/v1/queues/book` (Creates a court booking with specific time slots)
 
-#### 🤝 NTRP Matchmaking System (Phase 2)
-*   `POST /api/v1/matching/find` (Searches compatible players and posts a match)
+#### 🤝 NTRP Matchmaking System (Phase 1)
+*   `POST /api/v1/matching/find` (Searches compatible players and posts a match - *Phase 1*)
 
-#### 💬 Post-Match User Reviews (UGC Loop - Phase 2)
-*   `POST /api/v1/matches/{id}/reviews` (Submits a 1-5 star rating and comment for an opponent)
+#### 💬 Post-Match User Reviews (UGC Loop - Phase 1)
+*   `POST /api/v1/matches/{id}/reviews` (Submits a 1-5 star rating and comment for an opponent - *Phase 1*)
 
 #### 💳 Payments System (Phase 1)
 *   `POST /api/v1/payments/pay` (Uploads bank transfer slip images for payment)
@@ -91,6 +104,6 @@ To launch the project as efficiently as possible, we have split the features int
 
 Once API integration tests with Wix are complete, transitioning to the production environment requires:
 1.  **MongoDB Production Connection:** Swap the mock data layer with production MongoDB credentials once provided.
-2.  **Google SSO Credentials:** Configure production credentials via the Google Cloud Console (*Phase 2*).
+2.  **Google SSO Credentials:** Configure production credentials via the Google Cloud Console (*Phase 1*).
 3.  **SMS Gateway Credentials:** Link actual API keys with a Thailand-based SMS gateway for real OTP distribution (*Phase 1*).
 4.  **Auto Slip Verification:** Integrate a banking OCR/API to scan slip QR codes for automated court booking approvals (*Phase 1*).

@@ -43,3 +43,6 @@ Thumbs.db
 
 
 **/logs/
+
+# 📂 Uploaded Slips (สลิปโอนเงินจำลอง)
+**/uploads/
