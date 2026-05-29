@@ -21,4 +21,11 @@ class Settings:
     SMS_SENDER_NAME: str = os.getenv("SMS_SENDER_NAME", "SMS")
     SMS_OTP_API_URL: str = os.getenv("SMS_OTP_API_URL", "https://otp.thaibulksms.com/v1/otp")
 
+    def __init__(self):
+        # 🐳 ดักจับอัตโนมัติหากรันแอปพลิเคชันอยู่ภายในตู้คอนเทนเนอร์ Docker (WSL/Compose Network)
+        # ให้ทำการสลับ URL การเชื่อมต่อไปยังโฮสต์ 'mongodb' ที่เป็น Service Name แทน 'localhost' ทันที
+        if os.path.exists("/.dockerenv") and self.MONGODB_URL == "mongodb://localhost:27017":
+            self.MONGODB_URL = "mongodb://mongodb:27017"
+
 settings = Settings()
+

@@ -1,11 +1,14 @@
 from datetime import datetime
 from typing import List, Optional
 from pydantic import BaseModel, Field
+# pyrefly: ignore [missing-import]
 from beanie import Document, PydanticObjectId
 
 # ----------------- Sub-Models -----------------
 
 class UserProfile(BaseModel):
+    model_config = {"extra": "allow"}  # อนุญาตฟิลด์เพิ่มเติมจากข้อมูล seed
+
     display_name: str
     phone: str
     is_phone_verified: bool = False
@@ -13,6 +16,11 @@ class UserProfile(BaseModel):
     wtn_rating: float = 40.0 # ระดับฝีมือ 40 - 1
     playing_style: str = "All-Court" # "Aggressive Baseliner", "Serve & Volley", etc.
     match_preference: str = "any" # "equal", "higher", "lower", "any"
+    gender: Optional[str] = None # "male", "female", "other"
+    birthday: Optional[str] = None # รูปแบบ YYYY-MM-DD
+    nationality: Optional[str] = None # "thai", "american", etc.
+    vip: bool = False # สถานะ VIP
+    points: int = 0 # คะแนนสะสม
 
 class AvailableSlot(BaseModel):
     time_slot: str
