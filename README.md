@@ -17,8 +17,8 @@
 | ส่วนงาน | เทคโนโลยี | เวอร์ชันที่กำหนด | URL / Port ท้องถิ่น |
 | :--- | :--- | :--- | :--- |
 | **หน้าบ้าน (Frontend)** | Wix.com | - | เชื่อมต่อผ่าน API |
-| **หลังบ้าน (Backend)** | Python (FastAPI), Uvicorn, Beanie ODM | `Python 3.11.9` | `http://localhost:8000` |
-| **ฐานข้อมูล (Database)** | MongoDB Community Server | `MongoDB v7.0.9` | `mongodb://localhost:27017` |
+| **หลังบ้าน (Backend)** | Python (FastAPI), Uvicorn, SQLAlchemy | `Python 3.11.9` | `http://localhost:8000` |
+| **ฐานข้อมูล (Database)** | Supabase Cloud (PostgreSQL) | `PostgreSQL 15` | เชื่อมต่อผ่าน Cloud URL |
 
 ---
 
@@ -26,7 +26,7 @@
 ```text
 ALM-X-IMPACT-Tennis/
 ├── docs/                 # เอกสารสเปกโครงการและการวิเคราะห์ฟีเจอร์
-├── backend/              # หลังบ้านพัฒนาด้วย Python FastAPI + MongoDB (เชื่อมต่อกับ Wix.com)
+├── backend/              # หลังบ้านพัฒนาด้วย Python FastAPI + Supabase Cloud PostgreSQL (เชื่อมต่อกับ Wix.com)
 └── database/             # Scripts สำหรับ Seed data และ Config ทั่วไป
 ```
 
@@ -37,7 +37,7 @@ ALM-X-IMPACT-Tennis/
 ### 💻 1. การเตรียมสภาพแวดล้อม (Prerequisites)
 ตรวจสอบให้แน่ใจว่าเครื่องคอมพิวเตอร์ของคุณลงโปรแกรมเหล่านี้ตามเวอร์ชันของเครื่องพัฒนาหลัก:
 *   **Python:** เวอร์ชัน `v3.11.9` (เช็กด้วย `python --version`)
-*   **MongoDB:** ติดตั้ง MongoDB Community Server และเปิดรันที่พอร์ต `27017`
+*   **Supabase Cloud:** ฐานข้อมูล PostgreSQL บน Cloud (ไม่ต้องติดตั้งอะไรในเครื่อง เชื่อมต่อผ่าน `SUPABASE_DB_URL` ในไฟล์ `.env`)
 
 ---
 

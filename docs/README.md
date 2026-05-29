@@ -16,9 +16,9 @@
 ---
 
 ### 📐 2. ข้อกำหนดทางเทคนิค (Technical Specifications & Contracts)
-พิมพ์เขียวสำหรับระบบหลังบ้าน (FastAPI + MongoDB) ที่พี่ไมค์ใช้สำหรับออกแบบระบบและการสื่อสาร
+พิมพ์เขียวสำหรับระบบหลังบ้าน (FastAPI + Supabase Cloud PostgreSQL) ที่พี่ไมค์ใช้สำหรับออกแบบระบบและการสื่อสาร
 *   📄 **[project_specification.md](file:///c:/GitHub/ALM-X-IMPACT-Tennis/docs/project_specification.md)**  
-    *   *วัตถุประสงค์:* รายละเอียดเวอร์ชัน Tech Stack, โครงสร้าง Collections ใน MongoDB และข้อตกลง Schema (API Contract) สำหรับการเชื่อมต่อระหว่างหน้าบ้านและหลังบ้าน
+    *   *วัตถุประสงค์:* รายละเอียดเวอร์ชัน Tech Stack, โครงสร้างตารางใน Supabase Cloud PostgreSQL และข้อตกลง Schema (API Contract) สำหรับการเชื่อมต่อระหว่างหน้าบ้านและหลังบ้าน
 
 ---
 

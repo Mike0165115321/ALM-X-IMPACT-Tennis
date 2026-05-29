@@ -8,8 +8,7 @@ class Settings:
     PORT: int = int(os.getenv("PORT", "8000"))
     HOST: str = os.getenv("HOST", "0.0.0.0")
 
-    MONGODB_URL: str = os.getenv("MONGODB_URL", "mongodb://localhost:27017")
-    DATABASE_NAME: str = os.getenv("DATABASE_NAME", "alm_impact_tennis")
+    SUPABASE_DB_URL: str = os.getenv("SUPABASE_DB_URL", os.getenv("DATABASE_URL", "postgresql+asyncpg://postgres:postgres@localhost:5432/postgres"))
 
     JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", "super_secret_jwt_key_change_me_in_production")
     JWT_ALGORITHM: str = os.getenv("JWT_ALGORITHM", "HS256")
@@ -31,10 +30,9 @@ class Settings:
     GOOGLE_CLIENT_ID: str = os.getenv("GOOGLE_CLIENT_ID", "")
 
     def __init__(self):
-        # 🐳 ดักจับอัตโนมัติหากรันแอปพลิเคชันอยู่ภายในตู้คอนเทนเนอร์ Docker (WSL/Compose Network)
-        # ให้ทำการสลับ URL การเชื่อมต่อไปยังโฮสต์ 'mongodb' ที่เป็น Service Name แทน 'localhost' ทันที
-        if os.path.exists("/.dockerenv") and self.MONGODB_URL == "mongodb://localhost:27017":
-            self.MONGODB_URL = "mongodb://mongodb:27017"
+        # หาก URL การเชื่อมต่อระบุเป็น postgresql:// (sync) ให้สลับเป็น postgresql+asyncpg:// (async) อัตโนมัติเพื่อใช้ร่วมกับ SQLAlchemy Async
+        if self.SUPABASE_DB_URL.startswith("postgresql://"):
+            self.SUPABASE_DB_URL = self.SUPABASE_DB_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
 
 settings = Settings()
 

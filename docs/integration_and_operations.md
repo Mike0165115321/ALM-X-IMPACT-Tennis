@@ -59,8 +59,7 @@
 | :--- | :--- | :--- |
 | `PORT` | พอร์ตสำหรับการรันหลังบ้านในเครื่องของท่าน | `8000` |
 | `HOST` | ไอพีแอดเดรสสำหรับผูกการเชื่อมต่อ | `0.0.0.0` (ยอมรับทุกการเชื่อมต่อ) |
-| `MONGODB_URL` | ลิงก์ปลายทางเชื่อมต่อฐานข้อมูล MongoDB จริง | `mongodb://localhost:27017` |
-| `DATABASE_NAME` | ชื่อฐานข้อมูลใน MongoDB | `alm_impact_tennis` |
+| `SUPABASE_DB_URL` | ลิงก์ปลายทางเชื่อมต่อฐานข้อมูล Supabase Cloud (PostgreSQL) | `postgresql+asyncpg://postgres:PASSWORD@db.xxx.supabase.co:5432/postgres` |
 | `JWT_SECRET_KEY` | รหัสลับความปลอดภัยสำหรับใช้เข้ารหัส Token สมาชิก | `super_secret_jwt_key_change_me_in_production` |
 | `SMS_API_KEY` | App Key ประจำแอปพลิเคชัน OTP จาก ThaiBulkSMS | `17798576284341` |
 | `SMS_API_SECRET` | App Secret ประจำแอป OTP จาก ThaiBulkSMS | `b60f404535a699f6866a46dd83975865` |

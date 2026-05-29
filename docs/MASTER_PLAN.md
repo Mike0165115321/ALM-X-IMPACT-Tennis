@@ -24,13 +24,13 @@
 
 ### 0.2 FastAPI Application Core ✅
 - ✅ สร้างไฟล์ `main.py` — ตั้งค่า FastAPI App, CORS Middleware, ลงทะเบียน Routers ทั้ง 7 ตัว, เพิ่มระบบ Lifespan และ exception handler
-- ✅ สร้าง `app/config.py` — โหลดตัวแปรจาก `.env` (PORT, MONGODB_URL, JWT keys, SMS keys ฯลฯ)
+- ✅ สร้าง `app/config.py` — โหลดตัวแปรจาก `.env` (PORT, SUPABASE_DB_URL, JWT keys, SMS keys ฯลฯ)
 - ✅ สร้าง `app/utils.py` — ฟังก์ชัน hash/verify password ด้วย `pwdlib[bcrypt]`, สร้าง/ถอดรหัส JWT Token ด้วย `PyJWT`
 - ✅ สร้าง `app/exceptions.py` — Custom Exceptions ครบ 3 ตัว: `SMSGatewayException` (502), `SlotConflictException` (409), `UserDuplicateBookingException` (400)
 - ✅ สร้าง `app/logger.py` — ระบบ Log แบบ Rotating File Handler (5MB / 5 backup files) + Console
 
-### 0.3 Beanie Document Models ✅
-- ✅ สร้าง `app/models.py` — เตรียม Beanie Document Models ครบทุก Collection:
+### 0.3 SQLAlchemy Document Models ✅
+- ✅ สร้าง `app/models.py` — เตรียม SQLAlchemy Document Models ครบทุก Collection:
   - `User` (+ `UserProfile` sub-model และ Unique index)
   - `Court` (+ Compound index)
   - `Booking`
@@ -39,14 +39,14 @@
   - `Transaction`
 
 ### 0.4 Mock Data Layer ✅
-- ✅ ลบ `app/services/mock_db.py` ทิ้ง เนื่องจากได้ทำการไมเกรตระบบทั้งหมดไปใช้ฐานข้อมูล MongoDB และ Beanie แล้ว 100%
+- ✅ ลบ `app/services/mock_db.py` ทิ้ง เนื่องจากได้ทำการไมเกรตระบบทั้งหมดไปใช้ฐานข้อมูล Supabase Cloud (SQLAlchemy + asyncpg) แล้ว 100%
 - ✅ สร้าง `app/services/otp_store.py` — เพื่อใช้สำหรับเก็บบันทึกรหัส OTP ชั่วคราวในหน่วยความจำ (In-memory) แยกจากไฟล์อื่นเพื่อความสะอาด
-- ✅ สร้าง `app/services/data_service.py` — เขียนแบบ Asynchronous (Async/Await) เชื่อมโยงข้อมูลผ่าน Beanie/MongoDB ทั้งหมด
+- ✅ สร้าง `app/services/data_service.py` — เขียนแบบ Asynchronous (Async/Await) เชื่อมโยงข้อมูลผ่าน SQLAlchemy/Supabase Cloud ทั้งหมด
 - ✅ สร้าง `app/services/storage_service.py` — จัดการจัดเก็บสลิปการโอนเงินแบบ Async/Non-blocking IO ด้วย `asyncio.to_thread()` ป้องกันเซิร์ฟเวอร์ค้าง
 
 ### 0.5 ระบบทดสอบ (Test Suites) ✅
-- ✅ สร้าง `test_integration.py` — ชุดทดสอบแบบ Async fixture เต็มรูปแบบ (สมัครสมาชิก -> OTP send -> OTP verify -> ดูสนาม -> จองคิว -> อัปโหลดสลิป -> แอดมินอนุมัติ) ทำงานร่วมกับ MongoDB สมบูรณ์แบบ
-- ✅ สร้าง `test_edge_cases.py` — ชุดทดสอบความเสถียรและเคสขอบเขต (อีเมลซ้ำ, รหัสผ่านสั้น, รูปแบบวันที่, จองสนาม ID มั่ว, สล็อตชนกัน) ทำงานร่วมกับ MongoDB สมบูรณ์แบบ
+- ✅ สร้าง `test_integration.py` — ชุดทดสอบแบบ Async fixture เต็มรูปแบบ (สมัครสมาชิก -> OTP send -> OTP verify -> ดูสนาม -> จองคิว -> อัปโหลดสลิป -> แอดมินอนุมัติ) ทำงานร่วมกับ Supabase Cloud สมบูรณ์แบบ
+- ✅ สร้าง `test_edge_cases.py` — ชุดทดสอบความเสถียรและเคสขอบเขต (อีเมลซ้ำ, รหัสผ่านสั้น, รูปแบบวันที่, จองสนาม ID มั่ว, สล็อตชนกัน) ทำงานร่วมกับ Supabase Cloud สมบูรณ์แบบ
 
 ### 0.6 เอกสารประกอบ ✅
 - ✅ `README.md` — คู่มือ Quick Start, Tech Stack, Git Rules
@@ -67,11 +67,11 @@
 
 | # | รายการ | สถานะ | ไฟล์ที่เกี่ยวข้อง | รายละเอียด |
 |---|--------|--------|-------------------|------------|
-| 1 | Endpoint `POST /api/v1/auth/register` | ✅ | `routers/auth.py` | สมัครสมาชิกแบบ Async, ป้องกันอีเมลซ้ำ, เข้ารหัสด้วย bcrypt และลงทะเบียนใน MongoDB สำเร็จ |
-| 2 | Endpoint `POST /api/v1/auth/login` | ✅ | `routers/auth.py` | ล็อกอินแอดมินหรือผู้ใช้ ดึงข้อมูลและตรวจสอบ bcrypt จาก MongoDB พร้อมส่ง JWT Token กลับไป |
-| 3 | ระบบ JWT Authentication (Bearer Token) | ✅ | `routers/auth.py`, `utils.py` | `get_current_user()` รองรับการแปลง Object และดึงบัญชีผู้ใช้จริงจาก MongoDB |
+| 1 | Endpoint `POST /api/v1/auth/register` | ✅ | `routers/auth.py` | สมัครสมาชิกแบบ Async, ป้องกันอีเมลซ้ำ, เข้ารหัสด้วย bcrypt และลงทะเบียนใน Supabase Cloud สำเร็จ |
+| 2 | Endpoint `POST /api/v1/auth/login` | ✅ | `routers/auth.py` | ล็อกอินแอดมินหรือผู้ใช้ ดึงข้อมูลและตรวจสอบ bcrypt จาก Supabase Cloud พร้อมส่ง JWT Token กลับไป |
+| 3 | ระบบ JWT Authentication (Bearer Token) | ✅ | `routers/auth.py`, `utils.py` | `get_current_user()` รองรับการแปลง Object และดึงบัญชีผู้ใช้จริงจาก Supabase Cloud |
 | 4 | Password Hashing ด้วย `pwdlib[bcrypt]` | ✅ | `utils.py` | ใช้ `pwdlib` ทำการเข้ารหัสและตรวจสอบรหัสผ่านอย่างปลอดภัยและเสถียร |
-| 5 | **เชื่อมต่อ DB จริง** — ลงทะเบียนและตรวจสอบผู้ใช้จริง | ✅ | `data_service.py` | สลับการอ่านเขียนจาก Mock Users มาเป็น Beanie Model 100% |
+| 5 | **เชื่อมต่อ DB จริง** — ลงทะเบียนและตรวจสอบผู้ใช้จริง | ✅ | `data_service.py` | สลับการอ่านเขียนจาก Mock Users มาเป็น SQLAlchemy Model 100% |
 
 ---
 
@@ -80,12 +80,12 @@
 | # | รายการ | สถานะ | ไฟล์ที่เกี่ยวข้อง | รายละเอียด |
 |---|--------|--------|-------------------|------------|
 | 1 | Endpoint `POST /api/v1/auth/otp/send` | ✅ | `routers/auth.py` | สุ่มรหัส OTP และ Ref code เก็บบันทึกในหน่วยความจำและเรียกส่ง SMS |
-| 2 | Endpoint `POST /api/v1/auth/otp/verify` | ✅ | `routers/auth.py` | ตรวจสอบข้อมูล OTP และทำการอัปเดตสถานะผู้ใช้ใน MongoDB เป็น `is_phone_verified = True` จริง |
+| 2 | Endpoint `POST /api/v1/auth/otp/verify` | ✅ | `routers/auth.py` | ตรวจสอบข้อมูล OTP และทำการอัปเดตสถานะผู้ใช้ใน Supabase Cloud เป็น `is_phone_verified = True` จริง |
 | 3 | Rate Limiting (สูงสุด 3 ครั้ง / 15 นาที) | ✅ | `data_service.py` | ตรวจสอบผ่าน `otp_store` ในหน่วยความจำอย่างเสถียร |
 | 4 | OTP หมดอายุอัตโนมัติ (5 นาที) | ✅ | `data_service.py` | ตรวจสอบวันเวลาแบบ Timezone-aware เพื่อป้องกันการกรอกรหัสที่หมดอายุ |
 | 5 | เชื่อมต่อ ThaiBulkSMS OTP API จริง | ✅ | `sms_service.py` | มีฟังก์ชันแบบ Async ยิงคำขอและยืนยันผลกับ Gateway จริง, มีระบบ simulator เพื่อความสะดวก |
 | 6 | เบอร์ทดสอบ (087xxxxxxx) ข้าม SMS Gateway | ✅ | `routers/auth.py` | ปลอดภัยและเสถียร รองรับการทดสอบใน Pytest อัตโนมัติ |
-| 7 | **เชื่อมต่อ DB จริง** — อัปเดตข้อมูลยืนยันตัวตนผู้ใช้ | ✅ | `data_service.py` | อัปเดตสถานะยืนยันโทรศัพท์ของผู้ใช้จริงใน MongoDB |
+| 7 | **เชื่อมต่อ DB จริง** — อัปเดตข้อมูลยืนยันตัวตนผู้ใช้ | ✅ | `data_service.py` | อัปเดตสถานะยืนยันโทรศัพท์ของผู้ใช้จริงใน Supabase Cloud |
 
 ---
 
@@ -93,9 +93,9 @@
 
 | # | รายการ | สถานะ | ไฟล์ที่เกี่ยวข้อง | รายละเอียด |
 |---|--------|--------|-------------------|------------|
-| 1 | Endpoint `GET /api/v1/courts?date=YYYY-MM-DD` | ✅ | `routers/courts.py` | ดึงข้อมูลสล็อตว่างและคอร์ทเทนนิสทั้งหมดจาก MongoDB |
-| 2 | Dynamic Slot Availability | ✅ | `routers/courts.py` | ประเมินความว่างแบบ Real-time โดยดึงข้อมูลคิวที่จองไปแล้วจาก MongoDB มาประมวลผล |
-| 3 | **เชื่อมต่อ DB จริง** — ดึงข้อมูลสนามจริง | ✅ | `routers/courts.py` | ไมเกรตจากการดึง Mock Courts มาเป็น Beanie ORM สำเร็จ |
+| 1 | Endpoint `GET /api/v1/courts?date=YYYY-MM-DD` | ✅ | `routers/courts.py` | ดึงข้อมูลสล็อตว่างและคอร์ทเทนนิสทั้งหมดจาก Supabase Cloud |
+| 2 | Dynamic Slot Availability | ✅ | `routers/courts.py` | ประเมินความว่างแบบ Real-time โดยดึงข้อมูลคิวที่จองไปแล้วจาก Supabase Cloud มาประมวลผล |
+| 3 | **เชื่อมต่อ DB จริง** — ดึงข้อมูลสนามจริง | ✅ | `routers/courts.py` | ไมเกรตจากการดึง Mock Courts มาเป็น SQLAlchemy ORM สำเร็จ |
 
 ---
 
@@ -103,13 +103,13 @@
 
 | # | รายการ | สถานะ | ไฟล์ที่เกี่ยวข้อง | รายละเอียด |
 |---|--------|--------|-------------------|------------|
-| 1 | Endpoint `GET /api/v1/queues` | ✅ | `routers/queues.py` | เรียกรายการจองของตนเอง (ผู้ใช้) หรือของทั้งหมด (แอดมิน) จาก MongoDB |
-| 2 | Endpoint `POST /api/v1/queues/book` | ✅ | `routers/queues.py` | ทำการตรวจสอบสิทธิ์และสร้าง Booking บันทึกลง MongoDB |
-| 3 | Endpoint `PATCH /api/v1/queues/{id}/cancel` | ✅ | `routers/queues.py` | ยกเลิกรายการจองและตั้งสถานะเป็น `cancelled` ใน MongoDB |
+| 1 | Endpoint `GET /api/v1/queues` | ✅ | `routers/queues.py` | เรียกรายการจองของตนเอง (ผู้ใช้) หรือของทั้งหมด (แอดมิน) จาก Supabase Cloud |
+| 2 | Endpoint `POST /api/v1/queues/book` | ✅ | `routers/queues.py` | ทำการตรวจสอบสิทธิ์และสร้าง Booking บันทึกลง Supabase Cloud |
+| 3 | Endpoint `PATCH /api/v1/queues/{id}/cancel` | ✅ | `routers/queues.py` | ยกเลิกรายการจองและตั้งสถานะเป็น `cancelled` ใน Supabase Cloud |
 | 4 | Guard: ต้องยืนยัน OTP ก่อนจอง | ✅ | `routers/queues.py` | ตรวจสอบผ่านเอกสารผู้ใช้จริงในฐานข้อมูล |
-| 5 | Guard: Slot Conflict (409) | ✅ | `data_service.py` | ตรวจสอบการจองทับซ้อนกับสนามอื่นบน MongoDB |
-| 6 | Guard: Duplicate Booking (400) | ✅ | `data_service.py` | ตรวจสอบการจองซ้ำสล็อตเดียวกันของตัวผู้ใช้เองบน MongoDB |
-| 7 | **เชื่อมต่อ DB จริง** — บันทึกการจองสนามจริง | ✅ | `data_service.py` | สลับมาใช้ Beanie model สำหรับเขียนจองลง MongoDB สำเร็จ |
+| 5 | Guard: Slot Conflict (409) | ✅ | `data_service.py` | ตรวจสอบการจองทับซ้อนกับสนามอื่นบน Supabase Cloud |
+| 6 | Guard: Duplicate Booking (400) | ✅ | `data_service.py` | ตรวจสอบการจองซ้ำสล็อตเดียวกันของตัวผู้ใช้เองบน Supabase Cloud |
+| 7 | **เชื่อมต่อ DB จริง** — บันทึกการจองสนามจริง | ✅ | `data_service.py` | สลับมาใช้ SQLAlchemy Model สำหรับเขียนจองลง Supabase Cloud สำเร็จ |
 
 ---
 
@@ -117,10 +117,10 @@
 
 | # | รายการ | สถานะ | ไฟล์ที่เกี่ยวข้อง | รายละเอียด |
 |---|--------|--------|-------------------|------------|
-| 1 | Endpoint `POST /api/v1/payments/pay` (Form) | ✅ | `routers/payments.py` | บันทึกสลิป และลงทะเบียน Transaction ใน MongoDB พร้อมอัปเดต Booking เป็น `pending_verification` |
+| 1 | Endpoint `POST /api/v1/payments/pay` (Form) | ✅ | `routers/payments.py` | บันทึกสลิป และลงทะเบียน Transaction ใน Supabase Cloud พร้อมอัปเดต Booking เป็น `pending_verification` |
 | 2 | Validation ประเภทไฟล์ภาพ | ✅ | `routers/payments.py` | ปฏิเสธไฟล์ที่ไม่ใช่ภาพและรองรับชนิดรูปภาพหลัก (.png, .jpg, .webp) |
 | 3 | **อัปโหลดสลิปแบบ Async Non-blocking** | ✅ | `storage_service.py` | ใช้ `asyncio.to_thread()` คัดลอกไฟล์รูปภาพสลิปแบบ Non-blocking ไม่ทำให้เซิร์ฟเวอร์หน่วงหรือหยุดทำงาน |
-| 4 | **เชื่อมต่อ DB จริง** — บันทึกธุรกรรมโอนเงินจริง | ✅ | `data_service.py` | บันทึกลงใน Collection `transactions` บน MongoDB จริง |
+| 4 | **เชื่อมต่อ DB จริง** — บันทึกธุรกรรมโอนเงินจริง | ✅ | `data_service.py` | บันทึกลงใน ตาราง `alm_transactions` บน Supabase Cloud จริง |
 
 ---
 
@@ -128,10 +128,10 @@
 
 | # | รายการ | สถานะ | ไฟล์ที่เกี่ยวข้อง | รายละเอียด |
 |---|--------|--------|-------------------|------------|
-| 1 | Endpoint `GET /api/v1/admin/payments/pending` | ✅ | `routers/admin.py` | ดึงรายการธุรกรรมที่รอการอนุมัติ (`processing`) จาก MongoDB |
-| 2 | Endpoint `PATCH /api/v1/admin/payments/{tx_id}/verify` | ✅ | `routers/admin.py` | อนุมัติสลิป ปรับสถานะเป็น `verified` และยืนยันรายการจองเป็น `confirmed` ใน MongoDB |
+| 1 | Endpoint `GET /api/v1/admin/payments/pending` | ✅ | `routers/admin.py` | ดึงรายการธุรกรรมที่รอการอนุมัติ (`processing`) จาก Supabase Cloud |
+| 2 | Endpoint `PATCH /api/v1/admin/payments/{tx_id}/verify` | ✅ | `routers/admin.py` | อนุมัติสลิป ปรับสถานะเป็น `verified` และยืนยันรายการจองเป็น `confirmed` ใน Supabase Cloud |
 | 3 | Role Guard (Admin Only) | ✅ | `routers/admin.py` | ปลอดภัยด้วยการตรวจสิทธิ์และเข้าถึงผ่านการยืนยันตัวตนแอดมินจริง |
-| 4 | **เชื่อมต่อ DB จริง** — อัปเดตสถานะธุรกรรมแมนนวล | ✅ | `data_service.py` | อัปเดตค่าและสถานะสนามที่อนุมัติลง MongoDB จริง |
+| 4 | **เชื่อมต่อ DB จริง** — อัปเดตสถานะธุรกรรมแมนนวล | ✅ | `data_service.py` | อัปเดตค่าและสถานะสนามที่อนุมัติลง Supabase Cloud จริง |
 
 ---
 
@@ -140,7 +140,7 @@
 | # | รายการ | สถานะ | ไฟล์ที่เกี่ยวข้อง | รายละเอียด |
 |---|--------|--------|-------------------|------------|
 | 1 | Endpoint `GET /api/v1/data` | ✅ | `main.py` | แสดงยอดผู้ใช้ คอร์ท และแมตช์หาคู่เล่นแบบสรุป |
-| 2 | **เชื่อมต่อ DB จริง** — ประมวลผลจากฐานข้อมูลจริง | ✅ | `data_service.py` | เปลี่ยนจากการนับจากลิสต์ Mock มาใช้คำสั่ง `.count()` บน MongoDB จริง 100% |
+| 2 | **เชื่อมต่อ DB จริง** — ประมวลผลจากฐานข้อมูลจริง | ✅ | `data_service.py` | เปลี่ยนจากการนับจากลิสต์ Mock มาใช้คำสั่ง `.count()` บน Supabase Cloud จริง 100% |
 
 ---
 
@@ -148,7 +148,7 @@
 
 | # | รายการ | สถานะ | ไฟล์ที่เกี่ยวข้อง | รายละเอียด |
 |---|--------|--------|-------------------|------------|
-| 1 | Endpoint `POST /api/v1/auth/google` | 🟡 | `routers/auth.py` | มีโครงสร้าง Endpoint รองรับแล้ว รอการเชื่อมต่อ Google API Verify Token จริง |
+| 1 | Endpoint `POST /api/v1/auth/google` | ✅ | `routers/auth.py` | พัฒนาตรรกะ Verify ID Token กับ Google API จริง, รองรับ Account Merging และ Auto-Register สมบูรณ์ |
 
 ---
 
@@ -170,20 +170,20 @@
 
 ## 🔧 ส่วนที่ 2: Phase 1.5 — Go-Live (สลับจาก Mock → Production)
 
-**สถานะเฟสนี้: เสร็จสมบูรณ์แล้ว 100%** ทุกระบบได้รับการไมเกรตและทดสอบการรันร่วมกับ MongoDB/Beanie บนระบบจำลองเรียบร้อยแล้ว
+**สถานะเฟสนี้: เสร็จสมบูรณ์แล้ว 100%** ทุกระบบได้รับการไมเกรตและทดสอบการรันร่วมกับ Supabase Cloud (SQLAlchemy + asyncpg) ของบริษัทเรียบร้อยแล้ว
 
 ---
 
-### 2.1 เชื่อมต่อฐานข้อมูล MongoDB จริง ✅
+### 2.1 เชื่อมต่อฐานข้อมูล Supabase Cloud จริง ✅
 
 | # | รายการ | สถานะ | ไฟล์ที่ต้องแก้ | รายละเอียดสิ่งที่ทำสำเร็จ |
 |---|--------|--------|---------------|----------------------|
-| 1 | เปิดใช้ `init_beanie()` ใน startup lifespan | ✅ | `main.py` | เปลี่ยนมาใช้ `lifespan` context manager ในการเปิดปิดเซิร์ฟเวอร์ และเชื่อมต่อ MongoDB สำเร็จ |
-| 2 | เปลี่ยน `DataService` ทุกฟังก์ชันเป็น Beanie queries | ✅ | `data_service.py` | เขียนฟังก์ชันใหม่หมดเป็น Asynchronous 100% |
+| 1 | เปิดใช้ async engine และ sessionmaker ใน lifespan | ✅ | `main.py` | เปลี่ยนมาใช้ `lifespan` context manager ในการตั้งค่า engine ของ SQLAlchemy และเชื่อมต่อ Supabase Cloud สำเร็จ |
+| 2 | เปลี่ยน `DataService` ทุกฟังก์ชันเป็น SQLAlchemy queries | ✅ | `data_service.py` | เขียนฟังก์ชันใหม่หมดเป็น Asynchronous 100% โดยใช้ `select`, `update` และ session |
 | 3 | เปลี่ยน Routers ที่เรียก Direct API เป็น DataService | ✅ | `routers/` | ทุกๆ Router ทำการสลับมาใช้แบบ Async/Await เรียกผ่าน DataService 100% |
-| 4 | สร้าง Database Seed Script แบบปลอดภัย | ✅ | `main.py` | เพิ่มโค้ดระบบ Seeding อัตโนมัติ (ใส่ 2 คอร์ทเทนนิส และนำเข้าผู้ใช้ 767 คนโดยไม่มีข้อผิดพลาดจากการชนกันของคีย์) |
-| 5 | ตั้งค่า Database Indexes ใน Models | ✅ | `models.py` | ป้องกันด้วย Unique Index บน email ใน User, และ Compound Index บน booking ใน Booking |
-| 6 | สลับ URL ตามสภาพแวดล้อม (Docker/Host) | ✅ | `config.py` | ดักจับการทำงานแบบ container เพื่อสลับ endpoint mongodb และ uvicorn อัตโนมัติ |
+| 4 | เชื่อมต่อข้อมูลจริงบน Supabase Cloud | ✅ | `main.py` | เชื่อมต่อกับข้อมูลผู้ใช้และสนามของจริงบนคลาวด์บริษัท ปลอดภัยโดยไม่ใช้ข้อมูล seed สุ่มทับ |
+| 5 | ตั้งค่า Database constraints ใน Models | ✅ | `models.py` | ป้องกันด้วย SQLAlchemy Constraints เช่น Unique, Foreign Key และ Indexes ในระดับ table |
+| 6 | สลับ URL ตามสภาพแวดล้อม (Docker/Host) | ✅ | `config.py` | ดักจับและจัดการ SUPABASE_DB_URL พร้อมแปลงโปรโตคอลเป็น `postgresql+asyncpg://` สำหรับการทำงานแบบ async อัตโนมัติ |
 
 ---
 
@@ -238,13 +238,13 @@
 | เฟส | รวมรายการ | ✅ เสร็จ | 🟡 Mock | ❌ ยังไม่ทำ |
 |-----|-----------|---------|---------|------------|
 | **ส่วนที่ 0: Foundation** | 16 | 16 | 0 | 0 |
-| **ส่วนที่ 1: Phase 1 MVP** | 27 | 24 | 3 | 0 |
+| **ส่วนที่ 1: Phase 1 MVP** | 27 | 25 | 2 | 0 |
 | **ส่วนที่ 2: Phase 1.5 Go-Live** | 13 | 13 | 0 | 0 |
 | **ส่วนที่ 3: Phase 2 Membership** | 4 | 0 | 0 | 4 |
 | **ส่วนที่ 4: Phase 3 Marketplace** | 3 | 0 | 0 | 3 |
-| **รวมทั้งหมด** | **63** | **53** | **3** | **7** |
+| **รวมทั้งหมด** | **63** | **54** | **2** | **7** |
 
-> **สรุป: ทำเสร็จแล้ว 53 รายการ (84%), ทำโครงสร้าง Mock 3 รายการ (5%), ยังไม่ได้ทำ 7 รายการ (11%)**
+> **สรุป: ทำเสร็จแล้ว 54 รายการ (86%), ทำโครงสร้าง Mock 2 รายการ (3%), ยังไม่ได้ทำ 7 รายการ (11%)**
 
 ---
 

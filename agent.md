@@ -18,7 +18,7 @@ sequenceDiagram
     actor Player as 🎾 User (Player)
     participant Wix as 💻 Frontend (Wix.com)
     participant API as 🐍 Backend (FastAPI)
-    participant DB as 🗄️ Database (MongoDB)
+    participant DB as 🗄️ Database (Supabase Cloud PostgreSQL)
 
     Player->>Wix: 1. Triggers action (e.g., court booking)
     Wix->>API: 2. Sends REST API Request (JSON payload with Token/ID)
@@ -103,7 +103,7 @@ Clear boundaries prevent overlap and confusion between the frontend team (Wix.co
 ## 🛠5. Future Steps to Go Live
 
 Once API integration tests with Wix are complete, transitioning to the production environment requires:
-1.  **MongoDB Production Connection:** Swap the mock data layer with production MongoDB credentials once provided.
+1.  **✅ Supabase Cloud Connection:** เชื่อมต่อฐานข้อมูล Supabase Cloud PostgreSQL ของทางบริษัทเรียบร้อยแล้ว (ผ่าน SQLAlchemy + asyncpg)
 2.  **Google SSO Credentials:** Configure production credentials via the Google Cloud Console (*Phase 1*).
 3.  **SMS Gateway Credentials:** Link actual API keys with a Thailand-based SMS gateway for real OTP distribution (*Phase 1*).
 4.  **Auto Slip Verification:** Integrate a banking OCR/API to scan slip QR codes for automated court booking approvals (*Phase 1*).

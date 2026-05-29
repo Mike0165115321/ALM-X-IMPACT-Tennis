@@ -1,12 +1,13 @@
+import uuid
 from datetime import datetime, timezone
 from typing import List, Optional
 from pydantic import BaseModel, Field
-# pyrefly: ignore [missing-import]
-from beanie import Document, PydanticObjectId
-# pyrefly: ignore [missing-import]
-from pymongo import IndexModel, ASCENDING
+from sqlalchemy import Column, String, Float, Integer, DateTime, JSON, UniqueConstraint
+from sqlalchemy.orm import declarative_base
 
-# ----------------- Sub-Models -----------------
+Base = declarative_base()
+
+# ----------------- Pydantic Sub-Models (For validation and UI Contract) -----------------
 
 class UserProfile(BaseModel):
     model_config = {"extra": "allow"}  # อนุญาตฟิลด์เพิ่มเติมจากข้อมูล seed
@@ -28,86 +29,76 @@ class AvailableSlot(BaseModel):
     time_slot: str
     is_booked: bool = False
 
-# ----------------- Beanie Documents (Collections) -----------------
+# ----------------- SQLAlchemy Declarative Models (Supabase Tables) -----------------
 
-class User(Document):
-    username: str
-    email: str
-    password_hash: Optional[str] = None # เก็บ Hash รหัสผ่าน (เว้นว่างได้ถ้าใช้ Google OAuth)
-    google_id: Optional[str] = None # สำหรับล็อกอินด้วย Google SSO
-    role: str = "player" # "player", "admin", "court_owner"
-    profile: UserProfile
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+class User(Base):
+    __tablename__ = "alm_users"
 
-    class Settings:
-        name = "users" # ชื่อคอลเลกชันใน MongoDB
-        indexes = [
-            IndexModel([("email", ASCENDING)], unique=True),
-        ]
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    username = Column(String, nullable=False)
+    email = Column(String, unique=True, nullable=False, index=True)
+    password_hash = Column(String, nullable=True)
+    google_id = Column(String, nullable=True)
+    role = Column(String, default="player")
+    profile = Column(JSON, nullable=False, default=dict)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
-class Court(Document):
-    court_name: str
-    location: str
-    price_per_hour: float
-    available_slots: List[AvailableSlot] = []
+class Court(Base):
+    __tablename__ = "alm_courts"
 
-    class Settings:
-        name = "courts"
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    court_name = Column(String, nullable=False)
+    location = Column(String, nullable=False)
+    price_per_hour = Column(Float, nullable=False)
+    available_slots = Column(JSON, nullable=False, default=list)
 
-class Booking(Document):
-    user_id: PydanticObjectId # อ้างอิงไปยัง User
-    court_id: PydanticObjectId # อ้างอิงไปยัง Court
-    booking_date: str # รูปแบบ YYYY-MM-DD
-    time_slot: str # เช่น "18:00-20:00"
-    status: str = "pending" # "pending", "confirmed", "cancelled"
-    payment_id: Optional[PydanticObjectId] = None # อ้างอิงไปยัง Transaction
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+class Booking(Base):
+    __tablename__ = "alm_bookings"
 
-    class Settings:
-        name = "bookings"
-        indexes = [
-            IndexModel([("court_id", ASCENDING), ("booking_date", ASCENDING), ("time_slot", ASCENDING)]),
-            IndexModel([("user_id", ASCENDING)]),
-        ]
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String, nullable=False, index=True)
+    court_id = Column(String, nullable=False, index=True)
+    booking_date = Column(String, nullable=False, index=True)
+    time_slot = Column(String, nullable=False, index=True)
+    status = Column(String, default="pending")
+    payment_id = Column(String, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
-class Match(Document):
-    host_user_id: PydanticObjectId # ผู้สร้างแมตช์
-    invited_user_ids: List[PydanticObjectId] = [] # ผู้เล่นที่เข้ามาร่วม
-    court_id: PydanticObjectId
-    match_date: str # รูปแบบ YYYY-MM-DD
-    time_slot: str # เช่น "18:00-20:00"
-    match_type: str = "singles" # "singles" / "doubles"
-    ntrp_min: float = 1.5
-    ntrp_max: float = 7.0
-    status: str = "open" # "open", "matched", "cancelled"
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+class Match(Base):
+    __tablename__ = "alm_matches"
 
-    class Settings:
-        name = "matches"
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    host_user_id = Column(String, nullable=False, index=True)
+    invited_user_ids = Column(JSON, nullable=False, default=list)
+    court_id = Column(String, nullable=False)
+    match_date = Column(String, nullable=False)
+    time_slot = Column(String, nullable=False)
+    match_type = Column(String, default="singles")
+    ntrp_min = Column(Float, default=1.5)
+    ntrp_max = Column(Float, default=7.0)
+    status = Column(String, default="open")
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
-class Review(Document):
-    reviewer_id: PydanticObjectId # คนส่งคะแนน
-    reviewee_id: PydanticObjectId # คนที่ได้รับการประเมิน
-    match_id: PydanticObjectId # ไอดีแมตช์ที่เกี่ยวเนื่อง
-    rating: int = Field(default=5, ge=1, le=5) # 1 - 5 ดาว
-    comment: str
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+class Review(Base):
+    __tablename__ = "alm_reviews"
 
-    class Settings:
-        name = "reviews"
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    reviewer_id = Column(String, nullable=False)
+    reviewee_id = Column(String, nullable=False)
+    match_id = Column(String, nullable=False)
+    rating = Column(Integer, default=5)
+    comment = Column(String, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
-class Transaction(Document):
-    user_id: PydanticObjectId
-    booking_id: PydanticObjectId # อ้างอิงไปยัง Booking
-    amount: float
-    payment_method: str # "PromptPay", "BankTransfer"
-    slip_url: str # ที่อยู่ภาพสลิปที่เก็บไว้
-    status: str = "pending" # "pending", "verified", "failed"
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    verified_at: Optional[datetime] = None
+class Transaction(Base):
+    __tablename__ = "alm_transactions"
 
-    class Settings:
-        name = "transactions"
-        indexes = [
-            IndexModel([("status", ASCENDING)]),
-        ]
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String, nullable=False, index=True)
+    booking_id = Column(String, nullable=False)
+    amount = Column(Float, nullable=False)
+    payment_method = Column(String, nullable=False)
+    slip_url = Column(String, nullable=False)
+    status = Column(String, default="pending", index=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    verified_at = Column(DateTime(timezone=True), nullable=True)

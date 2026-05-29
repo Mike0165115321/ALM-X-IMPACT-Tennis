@@ -19,8 +19,8 @@
 *   **Language Runtime:** Python `v3.11.9` *(ตรงตามเวอร์ชันในเครื่องของท่าน)*
 *   **Web Framework:** FastAPI `v0.115.6` *(เวอร์ชันเสถียรล่าสุด รองรับ Asynchronous และสร้างคู่มือ Swagger Docs ให้อัตโนมัติ)*
 *   **ASGI Server:** Uvicorn `v0.34.0` *(เวอร์ชันล่าสุดสำหรับรัน Web Server ประสิทธิภาพสูง)*
-*   **Database ODM (Async):** Beanie `v1.27.0` *(ไลบรารี Object Document Mapper สำหรับ MongoDB ทำงานร่วมกับ Pydantic v2 แบบ Async อย่างเสถียร)*
-*   **Database Driver:** Motor `v3.6.0` *(Async MongoDB Driver สำหรับ Python เวอร์ชันล่าสุด)*
+*   **Database ORM (Async):** SQLAlchemy `v2.0+` *(Object Relational Mapper สำหรับ PostgreSQL ทำงานร่วมกับ Pydantic v2 แบบ Async อย่างเสถียร)*
+*   **Database Driver:** asyncpg `v0.29+` *(Async PostgreSQL Driver สำหรับ Python เวอร์ชันล่าสุด)*
 *   **Data Validation:** Pydantic `v2.10.3` *(เวอร์ชันล่าสุด ปลอดภัย และทำงานเร็วกว่า Pydantic v1 ถึง 10 เท่า)*
 *   **Auth & JWT:** PyJWT `v2.10.1` *(สร้างและตรวจสอบ JWT Token เวอร์ชันอัปเดตล่าสุด)*
 *   **Security & Password Hashing:** `pwdlib[bcrypt] v0.2.1` *(🔥 ใช้แทน passlib เพื่อตัดปัญหาการชนกันกับ bcrypt บน Python 3.11+ อย่างถาวร)*
@@ -30,44 +30,19 @@
 ---
 
 ### 🗄️ 3. Database & Tools
-*   **Database Engine:** MongoDB Community Server `v7.0.9` (ฐานข้อมูล NoSQL แบบ Document เพื่อรองรับ Schema ที่ยืดหยุ่นสูง)
-*   **GUI Client:** MongoDB Compass `v1.43.0` (สำหรับช่วยตรวจสอบข้อมูลในฐานข้อมูลผ่านหน้าต่างโปรแกรม)
+*   **Database Engine:** Supabase Cloud (PostgreSQL `v15`) (ฐานข้อมูล Relational บน Cloud ของทางบริษัท รองรับ Schema ที่ยืดหยุ่นสูงผ่าน JSONB Columns)
+*   **GUI Client:** Supabase Dashboard (สำหรับช่วยตรวจสอบข้อมูลในฐานข้อมูลผ่านหน้าเว็บ Supabase)
 
 ---
 
-### ⚠️ 4. ข้อควรระวังและการป้องกันบั๊ก/เออเรอร์ข้ามเวอร์ชัน (Breaking Changes & Error Prevention)
+### ⚠️ 4. ข้อควรระวังและการป้องกันบั๊ก/เออเรอร์ฝั่งหลังบ้าน (Error Prevention)
 
-เพื่อป้องกันการเกิดเออเรอร์ระหว่างรันโปรแกรม เนื่องจากฟีเจอร์เวอร์ชันล่าสุดของ Next.js 15 และ Python 3.11 มีการเปลี่ยนแปลงที่สำคัญ (Breaking Changes) ขอให้สมาชิกในทีมปฏิบัติตามแนวทางแก้ไขเหล่านี้:
-
-> [!IMPORTANT]
-> **1. Next.js 15: dynamic route `params` & `headers` เปลี่ยนเป็น Asynchronous**
-> ใน Next.js 15 ค่าของ `params`, `searchParams` รวมถึงฟังก์ชัน `cookies()` และ `headers()` **ต้องใช้ `await` เสมอ** การเรียกใช้แบบ Synchronous แบบเดิมจะทำให้เกิด Build Error ทันที!
-> *   *แบบเก่า (เกิดเออเรอร์ใน Next 15):*
->     ```typescript
->     export default function Page({ params }: { params: { id: string } }) {
->       return <div>ID: {params.id}</div>;
->     }
->     ```
-> *   *แบบใหม่ที่ถูกต้อง:*
->     ```typescript
->     export default async function Page({ params }: { params: Promise<{ id: string }> }) {
->       const { id } = await params;
->       return <div>ID: {id}</div>;
->     }
->     ```
+เพื่อป้องกันการเกิดเออเรอร์ระหว่างรันโปรแกรมฝั่งหลังบ้าน (Backend) ในสภาพแวดล้อม Python 3.11+ ขอให้ปฏิบัติงานตามแนวทางแก้ไขเหล่านี้:
 
 > [!WARNING]
-> **2. Python 3.11+: ปัญหา bcrypt ใน passlib (แนะนำใช้ pwdlib)**
+> **Python 3.11+: ปัญหา bcrypt ใน passlib (แนะนำใช้ pwdlib)**
 > ไลบรารี `passlib` เดิมไม่มีการอัปเดตมานาน เมื่อนำมารันร่วมกับไลบรารี `bcrypt` เวอร์ชันใหม่บน Python 3.11+ จะเกิดเออเรอร์ `TypeError: 'NoneType' object is not callable` หรือ `AttributeError` ตอนรันคำสั่งแฮชรหัสผ่าน
 > *   **ทางเลือกที่ถูกต้อง:** FastAPI ยุคปัจจุบันเปลี่ยนคำแนะนำอย่างเป็นทางการมาให้ใช้ **`pwdlib[bcrypt]`** ร่วมกับไลบรารี `bcrypt` โดยตรง ซึ่งเสถียรและทำงานร่วมกับ Python 3.11/3.12 ได้แบบ 100% ปราศจากข้อผิดพลาด
-
-> [!TIP]
-> **3. React 19 Peer Dependency ในการลงไลบรารีหน้าบ้าน**
-> เนื่องจาก Next.js 15 บังคับใช้ React 19 ซึ่งเพิ่งปล่อยตัวเต็ม ทำให้ไลบรารีเก่าบางตัวอาจไม่มีการประกาศว่าซัพพอร์ต React 19 ใน metadata ส่งผลให้ตอนพิมพ์ `npm install` อาจเกิดเออเรอร์บล็อกการติดตั้ง (Peer Dependency Conflict)
-> *   **วิธีแก้ไข:** หากลงไลบรารีทั่วไปแล้วติดปัญหา ให้ระบุแฟล็ก `--legacy-peer-deps` เพื่ออนุญาตให้ติดตั้งและทำงานร่วมกันได้ เช่น:
->     ```bash
->     npm install <package-name> --legacy-peer-deps
->     ```
 
 ---
 
@@ -78,7 +53,7 @@
 ### 💻 Local Development Ports
 *   **Frontend:** เชื่อมต่อผ่าน API จาก Wix.com
 *   **Backend (Python/FastAPI):** `http://localhost:8000`
-*   **Database (MongoDB):** `mongodb://localhost:27017`
+*   **Database (Supabase Cloud):** เชื่อมต่อผ่าน `SUPABASE_DB_URL` ในไฟล์ `.env`
 
 ### 🔄 Data Flow & System Diagram
 ```mermaid
@@ -86,7 +61,7 @@ graph TD
     %% Define Nodes
     Client["💻 Wix.com Frontend\n(Velo / Custom App)"]
     Backend["🐍 Python FastAPI\n(Port 8000)"]
-    Database[("🗄️ MongoDB\n(Port 27017)")]
+    Database[("🗄️ Supabase Cloud\n(PostgreSQL)")]
     PaymentGateway["💳 Third-Party Payment API\n(เช่น QR Code / Slip Verification)"]
 
     %% Define Connections
@@ -144,102 +119,91 @@ ALM-X-IMPACT-Tennis/ (Root)
 
 ## 🗃️ หัวข้อที่ 4: Database Schema Rough Draft (ร่างตารางฐานข้อมูลคร่าวๆ)
 
-ระบบจองคิวสนามเทนนิสและระบบจับคู่ใช้งาน **MongoDB** ซึ่งเป็นแบบ Document Schema ด้านล่างนี้คือแบบร่างโครงสร้างของคอลเลกชัน (Collections) หลักที่ปรับปรุงให้สอดรับกับฟีเจอร์ใน `core feature.md` แล้ว
+ระบบจองคิวสนามเทนนิสและระบบจับคู่ใช้งาน **Supabase Cloud PostgreSQL** ซึ่งเป็นแบบ Relational Tables ด้านล่างนี้คือแบบร่างโครงสร้างของตาราง (Tables) หลักที่ปรับปรุงให้สอดรับกับฟีเจอร์ใน `core feature.md` แล้ว (ใช้ JSONB Columns สำหรับข้อมูลแบบยืดหยุ่น)
 
-### 👥 1. Users Collection
-```json
-{
-  "_id": "ObjectId",
-  "username": "string",
-  "email": "string",
-  "password_hash": "string", // ค่าว่างได้หากสมัครผ่าน Google Auth
-  "google_id": "string", // เก็บ ID จาก Google SSO
-  "role": "string", // "player", "admin", "court_owner"
-  "profile": {
-    "display_name": "string",
-    "phone": "string",
-    "is_phone_verified": "boolean", // สถานะการยืนยันตัวตนด้วย OTP
-    "ntrp_rating": "number", // ระดับฝีมือเทนนิส 1.5 - 7.0 (NTRP)
-    "wtn_rating": "number", // ระดับฝีมือเทนนิส 40 - 1 (WTN)
-    "playing_style": "string", // "Aggressive Baseliner", "Serve & Volley", "All-Court"
-    "match_preference": "string" // "equal" (เท่ากัน), "higher" (เก่งกว่า), "lower" (อ่อนกว่า), "any"
-  },
-  "created_at": "datetime"
-}
+### 👥 1. Users Table (`alm_users`)
+```sql
+-- Table: alm_users
+id             TEXT PRIMARY KEY,  -- UUID
+username       TEXT NOT NULL,
+email          TEXT UNIQUE NOT NULL,
+password_hash  TEXT,               -- ค่าว่างได้หากสมัครผ่าน Google Auth
+google_id      TEXT,               -- เก็บ ID จาก Google SSO
+role           TEXT DEFAULT 'player',  -- "player", "admin", "court_owner"
+profile        JSONB NOT NULL,     -- เก็บข้อมูลโปรไฟล์ยืดหยุ่นแบบ JSON
+-- profile JSONB ประกอบด้วย:
+--   display_name, phone, is_phone_verified, ntrp_rating, wtn_rating,
+--   playing_style, match_preference
+created_at     TIMESTAMPTZ DEFAULT NOW()
 ```
 
-### 🎾 2. Courts Collection (ข้อมูลสนามเทนนิส)
-```json
-{
-  "_id": "ObjectId",
-  "court_name": "string",
-  "location": "string",
-  "price_per_hour": "number",
-  "available_slots": [
-    { "time_slot": "17:00-18:00", "is_booked": false }
-  ]
-}
+### 🎾 2. Courts Table (`alm_courts`)
+```sql
+-- Table: alm_courts
+id              TEXT PRIMARY KEY,  -- UUID
+court_name      TEXT NOT NULL,
+location        TEXT NOT NULL,
+price_per_hour  FLOAT NOT NULL,
+available_slots JSONB NOT NULL     -- [{"time_slot": "17:00-18:00", "is_booked": false}]
 ```
 
-### 📅 3. Bookings/Queues Collection (ระบบจองคิวสนาม)
-```json
-{
-  "_id": "ObjectId",
-  "user_id": "ObjectId", // Reference to Users
-  "court_id": "ObjectId", // Reference to Courts
-  "booking_date": "string", // YYYY-MM-DD
-  "time_slot": "string", // "18:00-19:00"
-  "status": "string", // "pending", "confirmed", "cancelled"
-  "payment_id": "ObjectId", // Reference to Transactions
-  "created_at": "datetime"
-}
+### 📅 3. Bookings Table (`alm_bookings`)
+```sql
+-- Table: alm_bookings
+id            TEXT PRIMARY KEY,  -- UUID
+user_id       TEXT NOT NULL,     -- Reference to alm_users
+court_id      TEXT NOT NULL,     -- Reference to alm_courts
+booking_date  TEXT NOT NULL,     -- YYYY-MM-DD
+time_slot     TEXT NOT NULL,     -- "18:00-19:00"
+status        TEXT DEFAULT 'pending',  -- "pending", "confirmed", "cancelled"
+payment_id    TEXT,              -- Reference to alm_transactions
+created_at    TIMESTAMPTZ DEFAULT NOW()
 ```
 
-### 🤝 4. Matches Collection (ระบบจับคู่เล่นเทนนิส)
-```json
-{
-  "_id": "ObjectId",
-  "host_user_id": "ObjectId", // ผู้สร้างโพสต์หาคู่เล่น
-  "invited_user_ids": ["ObjectId"], // ผู้ที่เข้ามาร่วมเล่นด้วย (Array รองรับประเภทคู่)
-  "court_id": "ObjectId",
-  "match_date": "string", // YYYY-MM-DD
-  "time_slot": "string", // "18:00-20:00"
-  "match_type": "string", // "singles" (เดี่ยว) / "doubles" (คู่)
-  "ntrp_min": "number", // เกณฑ์ฝีมือขั้นต่ำที่เปิดรับ (เช่น 3.0)
-  "ntrp_max": "number", // เกณฑ์ฝีมือสูงสุดที่เปิดรับ (เช่น 4.5)
-  "status": "string", // "open", "matched", "cancelled"
-  "created_at": "datetime"
-}
+### 🤝 4. Matches Table (`alm_matches`)
+```sql
+-- Table: alm_matches
+id               TEXT PRIMARY KEY,  -- UUID
+host_user_id     TEXT NOT NULL,     -- ผู้สร้างโพสต์หาคู่เล่น
+invited_user_ids JSONB DEFAULT '[]', -- ผู้ที่เข้ามาร่วมเล่นด้วย (Array รองรับประเภทคู่)
+court_id         TEXT NOT NULL,
+match_date       TEXT NOT NULL,     -- YYYY-MM-DD
+time_slot        TEXT NOT NULL,     -- "18:00-20:00"
+match_type       TEXT DEFAULT 'singles',  -- "singles" / "doubles"
+ntrp_min         FLOAT DEFAULT 1.5,      -- เกณฑ์ฝีมือขั้นต่ำที่เปิดรับ
+ntrp_max         FLOAT DEFAULT 7.0,      -- เกณฑ์ฝีมือสูงสุดที่เปิดรับ
+status           TEXT DEFAULT 'open',    -- "open", "matched", "cancelled"
+created_at       TIMESTAMPTZ DEFAULT NOW()
 ```
 
-### 💬 5. Reviews Collection (ระบบรีวิวผู้เล่นและสนาม - UGC Content)
-```json
-{
-  "_id": "ObjectId",
-  "reviewer_id": "ObjectId", // ผู้เขียนรีวิว (Reference to Users)
-  "reviewee_id": "ObjectId", // ผู้ที่ถูกรีวิว (Reference to Users - เพื่อนร่วมแมตช์)
-  "match_id": "ObjectId", // รีวิวที่เกิดจากแมตช์การเล่นใด (Reference to Matches)
-  "rating": "number", // คะแนนเรตติ้ง (1 - 5 ดาว)
-  "comment": "string", // ความคิดเห็นเพิ่มเติม
-  "created_at": "datetime"
-}
+### 💬 5. Reviews Table (`alm_reviews`)
+```sql
+-- Table: alm_reviews
+id           TEXT PRIMARY KEY,  -- UUID
+reviewer_id  TEXT NOT NULL,     -- ผู้เขียนรีวิว (Reference to alm_users)
+reviewee_id  TEXT NOT NULL,     -- ผู้ที่ถูกรีวิว (Reference to alm_users)
+match_id     TEXT NOT NULL,     -- รีวิวที่เกิดจากแมตช์การเล่นใด (Reference to alm_matches)
+rating       INTEGER DEFAULT 5, -- คะแนนเรตติ้ง (1 - 5 ดาว)
+comment      TEXT NOT NULL,     -- ความคิดเห็นเพิ่มเติม
+created_at   TIMESTAMPTZ DEFAULT NOW()
 ```
 
-### 💳 6. Transactions Collection (ระบบโอนเงิน/ชำระเงิน)
-```json
-{
-  "_id": "ObjectId",
-  "user_id": "ObjectId",
-  "amount": "number",
-  "payment_method": "string", // "PromptPay", "BankTransfer"
-  "slip_url": "string", // ที่อยู่ไฟล์ภาพสลิปบน Cloud
-  "status": "string", // "pending", "verified", "failed"
-  "verified_at": "datetime"
-}
+### 💳 6. Transactions Table (`alm_transactions`)
+```sql
+-- Table: alm_transactions
+id              TEXT PRIMARY KEY,  -- UUID
+user_id         TEXT NOT NULL,
+booking_id      TEXT NOT NULL,
+amount          FLOAT NOT NULL,
+payment_method  TEXT NOT NULL,     -- "PromptPay", "BankTransfer"
+slip_url        TEXT NOT NULL,     -- ที่อยู่ไฟล์ภาพสลิปบน Cloud
+status          TEXT DEFAULT 'pending',  -- "pending", "verified", "failed"
+created_at      TIMESTAMPTZ DEFAULT NOW(),
+verified_at     TIMESTAMPTZ
 ```
 
 ### 🔗 ความสัมพันธ์เบื้องต้น (Relationships)
-1.  **User กับ Booking (One-to-Many):** User 1 คน สามารถจองคิวสนามได้หลายครั้ง (`user_id` ในคอลเลกชัน Bookings)
+1.  **User กับ Booking (One-to-Many):** User 1 คน สามารถจองคิวสนามได้หลายครั้ง (`user_id` ในตาราง alm_bookings)
 2.  **User กับ Match (One-to-Many / Many-to-Many):** User 1 คนสามารถเป็น Host สร้าง Match ได้หลายอัน และเข้าร่วม Match ของคนอื่นได้หลายอัน
 3.  **Booking กับ Transaction (One-to-One):** การจองคิว 1 รายการ จะสัมพันธ์กับการโอนชำระเงิน 1 รายการเสมอ
 4.  **Match กับ Review (One-to-Many):** แมตช์ 1 แมตช์เมื่อสิ้นสุดการเล่นจะสามารถเกิดการรีวิวผู้เล่นที่ร่วมแมตช์ได้หลายรีวิว (UGC)
@@ -248,7 +212,7 @@ ALM-X-IMPACT-Tennis/ (Root)
 
 ## 🔌 หัวข้อที่ 5: API Endpoints Contract (สัญญาข้อตกลง API)
 
-สัญญาการเชื่อมต่อเพื่อประสิทธิภาพในการทำงานร่วมกันระหว่างหน้าบ้าน (Next.js) และหลังบ้าน (FastAPI) โดยเพิ่มการรองรับ Google Login, SMS OTP, และการส่งรีวิว UGC ตามโฟลว์จริง
+สัญญาการเชื่อมต่อเพื่อประสิทธิภาพในการทำงานร่วมกันระหว่างหน้าบ้าน (Wix.com) และหลังบ้าน (FastAPI) โดยเพิ่มการรองรับ Google Login, SMS OTP, และการส่งรีวิว UGC ตามโฟลว์จริง
 
 ### 🔐 1. Authentication (ระบบสมาชิกและความปลอดภัย)
 

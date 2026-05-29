@@ -1,34 +1,32 @@
 import logging
+import uuid
 from datetime import datetime, timedelta, timezone
 from typing import List, Dict, Any, Optional
-from beanie import PydanticObjectId
+# pyrefly: ignore [missing-import]
+from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
+# pyrefly: ignore [missing-import]
+from sqlalchemy import select, func, update, and_, or_
 
-from app.models import User, Court, Booking, Match, Review, Transaction, UserProfile
+# pyrefly: ignore [missing-import]
+from sqlalchemy.pool import NullPool
+from app.config import settings
+from app.models import User, Court, Booking, Match, Review, Transaction
 from app.services.otp_store import otp_store
 
 logger = logging.getLogger("data_service")
 
-def parse_id(id_val: Any) -> Optional[PydanticObjectId]:
-    if not id_val:
-        return None
-    if isinstance(id_val, PydanticObjectId):
-        return id_val
-    try:
-        return PydanticObjectId(str(id_val))
-    except Exception:
-        return None
+# 🔌 ตั้งค่า SQLAlchemy Asynchronous Engine และ Session (ใช้ NullPool เพื่อหลีกเลี่ยงการใช้ connection ร่วมกันแบบผิดพลาดในโหมด Async/pytest)
+engine = create_async_engine(settings.SUPABASE_DB_URL, poolclass=NullPool, echo=False)
+AsyncSessionLocal = async_sessionmaker(bind=engine, expire_on_commit=False)
 
 def to_dict(doc: Any) -> Optional[Dict[str, Any]]:
     if not doc:
         return None
-    res = doc.model_dump() if hasattr(doc, "model_dump") else doc.dict()
+    res = {}
+    for col in doc.__class__.__table__.columns:
+        res[col.name] = getattr(doc, col.name)
+    # รับประกันว่า id จะเป็น String แน่ๆ เผื่อกรณี UUID หรือ Types อื่นๆ
     res["id"] = str(doc.id)
-    # Convert all PydanticObjectId values to string
-    for k, v in list(res.items()):
-        if isinstance(v, PydanticObjectId):
-            res[k] = str(v)
-        elif isinstance(v, list):
-            res[k] = [str(x) if isinstance(x, PydanticObjectId) else x for x in v]
     return res
 
 class DataService:
@@ -37,35 +35,45 @@ class DataService:
     async def get_user_by_email(email: str) -> Optional[Dict[str, Any]]:
         if not email:
             return None
-        user = await User.find_one({"email": {"$regex": f"^{email}$", "$options": "i"}})
-        return to_dict(user)
+        async with AsyncSessionLocal() as session:
+            stmt = select(User).where(func.lower(User.email) == email.lower().strip())
+            res = await session.execute(stmt)
+            user = res.scalars().first()
+            return to_dict(user)
 
     @staticmethod
     async def get_user_by_id(user_id: str) -> Optional[Dict[str, Any]]:
-        parsed = parse_id(user_id)
-        if not parsed:
+        if not user_id:
             return None
-        user = await User.get(parsed)
-        return to_dict(user)
+        async with AsyncSessionLocal() as session:
+            stmt = select(User).where(User.id == str(user_id))
+            res = await session.execute(stmt)
+            user = res.scalars().first()
+            return to_dict(user)
 
     @staticmethod
     async def get_user_by_google_id(google_id: str) -> Optional[Dict[str, Any]]:
         if not google_id:
             return None
-        user = await User.find_one(User.google_id == google_id)
-        return to_dict(user)
+        async with AsyncSessionLocal() as session:
+            stmt = select(User).where(User.google_id == google_id)
+            res = await session.execute(stmt)
+            user = res.scalars().first()
+            return to_dict(user)
 
     @staticmethod
     async def link_google_id(user_id: str, google_id: str) -> Optional[Dict[str, Any]]:
-        parsed = parse_id(user_id)
-        if not parsed:
+        if not user_id:
             return None
-        user = await User.get(parsed)
-        if not user:
-            return None
-        user.google_id = google_id
-        await user.save()
-        return to_dict(user)
+        async with AsyncSessionLocal() as session:
+            stmt = select(User).where(User.id == str(user_id))
+            res = await session.execute(stmt)
+            user = res.scalars().first()
+            if not user:
+                return None
+            user.google_id = google_id
+            await session.commit()
+            return to_dict(user)
 
     @staticmethod
     async def create_user(
@@ -88,16 +96,20 @@ class DataService:
         if profile:
             default_profile.update(profile)
 
-        new_user = User(
-            username=username,
-            email=email.lower(),
-            password_hash=password_hash,
-            google_id=google_id,
-            role=role,
-            profile=UserProfile(**default_profile)
-        )
-        await new_user.insert()
-        return to_dict(new_user)
+        async with AsyncSessionLocal() as session:
+            new_user = User(
+                id=str(uuid.uuid4()),
+                username=username,
+                email=email.lower().strip(),
+                password_hash=password_hash,
+                google_id=google_id,
+                role=role,
+                profile=default_profile,
+                created_at=datetime.now(timezone.utc)
+            )
+            session.add(new_user)
+            await session.commit()
+            return to_dict(new_user)
 
     # 📞 2. SMS OTP Services
     @staticmethod
@@ -144,10 +156,18 @@ class DataService:
                 return False
                 
             if otp_entry["otp_code"] == otp_code and otp_entry["ref_code"] == ref_code:
-                user = await User.find_one({"profile.phone": phone})
-                if user:
-                    user.profile.is_phone_verified = True
-                    await user.save()
+                # ค้นหาผู้ใช้และอัปเดตเบอร์โทรเป็นยืนยันแล้ว
+                async with AsyncSessionLocal() as session:
+                    # ใน PostgreSQL คอลัมน์ profile เป็น JSONB สามารถตรวจสอบฟิลด์ nested ได้
+                    stmt = select(User).where(User.profile['phone'].as_string() == phone)
+                    res = await session.execute(stmt)
+                    user = res.scalars().first()
+                    if user:
+                        # อัปเดตแบบ Deep copy ของ JSON dict เพื่อบังคับ SQLAlchemy ตรวจจับความเปลี่ยนแปลง
+                        updated_profile = dict(user.profile)
+                        updated_profile["is_phone_verified"] = True
+                        user.profile = updated_profile
+                        await session.commit()
                 otp_store.pop(phone, None)
                 return True
             return False
@@ -163,10 +183,15 @@ class DataService:
         )
 
         if is_verified:
-            user = await User.find_one({"profile.phone": phone})
-            if user:
-                user.profile.is_phone_verified = True
-                await user.save()
+            async with AsyncSessionLocal() as session:
+                stmt = select(User).where(User.profile['phone'].as_string() == phone)
+                res = await session.execute(stmt)
+                user = res.scalars().first()
+                if user:
+                    updated_profile = dict(user.profile)
+                    updated_profile["is_phone_verified"] = True
+                    user.profile = updated_profile
+                    await session.commit()
             otp_store.pop(phone, None)
             return True
         return False
@@ -174,110 +199,142 @@ class DataService:
     # 🏛️ 2.5 Courts Services
     @staticmethod
     async def get_all_courts() -> List[Dict[str, Any]]:
-        courts = await Court.find_all().to_list()
-        return [to_dict(c) for c in courts]
+        async with AsyncSessionLocal() as session:
+            stmt = select(Court)
+            res = await session.execute(stmt)
+            courts = res.scalars().all()
+            return [to_dict(c) for c in courts]
 
     @staticmethod
     async def get_court_by_id(court_id: str) -> Optional[Dict[str, Any]]:
-        parsed = parse_id(court_id)
-        if not parsed:
+        if not court_id:
             return None
-        court = await Court.get(parsed)
-        return to_dict(court)
+        async with AsyncSessionLocal() as session:
+            stmt = select(Court).where(Court.id == str(court_id))
+            res = await session.execute(stmt)
+            court = res.scalars().first()
+            return to_dict(court)
 
     # 📅 3. Bookings Services
     @staticmethod
     async def get_bookings_by_user(user_id: str) -> List[Dict[str, Any]]:
-        parsed_user_id = parse_id(user_id)
-        if not parsed_user_id:
+        if not user_id:
             return []
-        bookings = await Booking.find(Booking.user_id == parsed_user_id).to_list()
-        user_bookings = []
-        for booking in bookings:
-            court = await Court.get(booking.court_id)
-            booking_copy = to_dict(booking)
-            booking_copy["court_name"] = court.court_name if court else "Unknown Court"
-            booking_copy["booking_id"] = str(booking.id)
-            user_bookings.append(booking_copy)
-        return user_bookings
+        async with AsyncSessionLocal() as session:
+            stmt = select(Booking).where(Booking.user_id == str(user_id))
+            res = await session.execute(stmt)
+            bookings = res.scalars().all()
+            
+            user_bookings = []
+            for booking in bookings:
+                court_stmt = select(Court).where(Court.id == booking.court_id)
+                court_res = await session.execute(court_stmt)
+                court = court_res.scalars().first()
+                
+                booking_copy = to_dict(booking)
+                booking_copy["court_name"] = court.court_name if court else "Unknown Court"
+                booking_copy["booking_id"] = str(booking.id)
+                user_bookings.append(booking_copy)
+            return user_bookings
 
     @staticmethod
     async def get_all_bookings() -> List[Dict[str, Any]]:
-        bookings = await Booking.find_all().to_list()
-        all_bookings = []
-        for booking in bookings:
-            court = await Court.get(booking.court_id)
-            booking_copy = to_dict(booking)
-            booking_copy["court_name"] = court.court_name if court else "Unknown Court"
-            booking_copy["booking_id"] = str(booking.id)
-            all_bookings.append(booking_copy)
-        return all_bookings
+        async with AsyncSessionLocal() as session:
+            stmt = select(Booking)
+            res = await session.execute(stmt)
+            bookings = res.scalars().all()
+            
+            all_bookings = []
+            for booking in bookings:
+                court_stmt = select(Court).where(Court.id == booking.court_id)
+                court_res = await session.execute(court_stmt)
+                court = court_res.scalars().first()
+                
+                booking_copy = to_dict(booking)
+                booking_copy["court_name"] = court.court_name if court else "Unknown Court"
+                booking_copy["booking_id"] = str(booking.id)
+                all_bookings.append(booking_copy)
+            return all_bookings
 
     @staticmethod
     async def get_booking_by_id(booking_id: str) -> Optional[Dict[str, Any]]:
-        parsed = parse_id(booking_id)
-        if not parsed:
+        if not booking_id:
             return None
-        booking = await Booking.get(parsed)
-        return to_dict(booking)
+        async with AsyncSessionLocal() as session:
+            stmt = select(Booking).where(Booking.id == str(booking_id))
+            res = await session.execute(stmt)
+            booking = res.scalars().first()
+            return to_dict(booking)
 
     @staticmethod
     async def is_slot_booked(court_id: str, booking_date: str, time_slot: str) -> bool:
-        parsed_court_id = parse_id(court_id)
-        if not parsed_court_id:
+        if not court_id:
             return False
-        booking = await Booking.find_one(
-            Booking.court_id == parsed_court_id,
-            Booking.booking_date == booking_date,
-            Booking.time_slot == time_slot,
-            Booking.status != "cancelled",
-            Booking.status != "payment_rejected"
-        )
-        return booking is not None
+        async with AsyncSessionLocal() as session:
+            stmt = select(Booking).where(
+                and_(
+                    Booking.court_id == str(court_id),
+                    Booking.booking_date == booking_date,
+                    Booking.time_slot == time_slot,
+                    Booking.status != "cancelled",
+                    Booking.status != "payment_rejected"
+                )
+            )
+            res = await session.execute(stmt)
+            booking = res.scalars().first()
+            return booking is not None
 
     @staticmethod
     async def has_user_booked_slot(user_id: str, booking_date: str, time_slot: str) -> bool:
-        parsed_user_id = parse_id(user_id)
-        if not parsed_user_id:
+        if not user_id:
             return False
-        booking = await Booking.find_one(
-            Booking.user_id == parsed_user_id,
-            Booking.booking_date == booking_date,
-            Booking.time_slot == time_slot,
-            Booking.status != "cancelled",
-            Booking.status != "payment_rejected"
-        )
-        return booking is not None
+        async with AsyncSessionLocal() as session:
+            stmt = select(Booking).where(
+                and_(
+                    Booking.user_id == str(user_id),
+                    Booking.booking_date == booking_date,
+                    Booking.time_slot == time_slot,
+                    Booking.status != "cancelled",
+                    Booking.status != "payment_rejected"
+                )
+            )
+            res = await session.execute(stmt)
+            booking = res.scalars().first()
+            return booking is not None
 
     @staticmethod
     async def create_booking(user_id: str, court_id: str, booking_date: str, time_slot: str) -> Dict[str, Any]:
-        parsed_user_id = parse_id(user_id)
-        parsed_court_id = parse_id(court_id)
-        if not parsed_user_id or not parsed_court_id:
+        if not user_id or not court_id:
             raise ValueError("ID ไม่ถูกต้อง")
             
-        new_booking = Booking(
-            user_id=parsed_user_id,
-            court_id=parsed_court_id,
-            booking_date=booking_date,
-            time_slot=time_slot,
-            status="pending_payment",
-            payment_id=None
-        )
-        await new_booking.insert()
-        return to_dict(new_booking)
+        async with AsyncSessionLocal() as session:
+            new_booking = Booking(
+                id=str(uuid.uuid4()),
+                user_id=str(user_id),
+                court_id=str(court_id),
+                booking_date=booking_date,
+                time_slot=time_slot,
+                status="pending_payment",
+                payment_id=None,
+                created_at=datetime.now(timezone.utc)
+            )
+            session.add(new_booking)
+            await session.commit()
+            return to_dict(new_booking)
 
     @staticmethod
     async def cancel_booking(booking_id: str) -> Optional[Dict[str, Any]]:
-        parsed = parse_id(booking_id)
-        if not parsed:
+        if not booking_id:
             return None
-        booking = await Booking.get(parsed)
-        if not booking:
-            return None
-        booking.status = "cancelled"
-        await booking.save()
-        return to_dict(booking)
+        async with AsyncSessionLocal() as session:
+            stmt = select(Booking).where(Booking.id == str(booking_id))
+            res = await session.execute(stmt)
+            booking = res.scalars().first()
+            if not booking:
+                return None
+            booking.status = "cancelled"
+            await session.commit()
+            return to_dict(booking)
 
     # 🤝 4. Matchmaking Services
     @staticmethod
@@ -290,22 +347,30 @@ class DataService:
         ntrp_max: float,
         preferred_playing_style: Optional[str] = None
     ) -> List[Dict[str, Any]]:
-        query = {
-            "role": "player",
-            "profile.ntrp_rating": {"$gte": ntrp_min, "$lte": ntrp_max}
-        }
-        if preferred_playing_style:
-            query["profile.playing_style"] = preferred_playing_style
+        async with AsyncSessionLocal() as session:
+            # Query users where profile NTRP is between min and max
+            stmt = select(User).where(
+                and_(
+                    User.role == "player",
+                    User.profile['ntrp_rating'].as_float() >= ntrp_min,
+                    User.profile['ntrp_rating'].as_float() <= ntrp_max
+                )
+            )
+            res = await session.execute(stmt)
+            users = res.scalars().all()
             
-        users = await User.find(query).to_list()
-        compatible_matches = []
-        for user in users:
-            compatible_matches.append({
-                "user_id": str(user.id),
-                "username": user.username,
-                "ntrp": user.profile.ntrp_rating
-            })
-        return compatible_matches
+            compatible_matches = []
+            for user in users:
+                user_style = user.profile.get("playing_style")
+                if preferred_playing_style and user_style != preferred_playing_style:
+                    continue
+                    
+                compatible_matches.append({
+                    "user_id": str(user.id),
+                    "username": user.username,
+                    "ntrp": user.profile.get("ntrp_rating", 1.5)
+                })
+            return compatible_matches
 
     @staticmethod
     async def create_match_post(
@@ -317,24 +382,26 @@ class DataService:
         ntrp_min: float,
         ntrp_max: float
     ) -> Dict[str, Any]:
-        parsed_host_user_id = parse_id(host_user_id)
-        parsed_court_id = parse_id(court_id)
-        if not parsed_host_user_id or not parsed_court_id:
+        if not host_user_id or not court_id:
             raise ValueError("ID ไม่ถูกต้อง")
             
-        new_match = Match(
-            host_user_id=parsed_host_user_id,
-            invited_user_ids=[],
-            court_id=parsed_court_id,
-            match_date=match_date,
-            time_slot=time_slot,
-            match_type=match_type,
-            ntrp_min=ntrp_min,
-            ntrp_max=ntrp_max,
-            status="open"
-        )
-        await new_match.insert()
-        return to_dict(new_match)
+        async with AsyncSessionLocal() as session:
+            new_match = Match(
+                id=str(uuid.uuid4()),
+                host_user_id=str(host_user_id),
+                invited_user_ids=[],
+                court_id=str(court_id),
+                match_date=match_date,
+                time_slot=time_slot,
+                match_type=match_type,
+                ntrp_min=ntrp_min,
+                ntrp_max=ntrp_max,
+                status="open",
+                created_at=datetime.now(timezone.utc)
+            )
+            session.add(new_match)
+            await session.commit()
+            return to_dict(new_match)
 
     # 💬 5. Reviews Services
     @staticmethod
@@ -345,21 +412,22 @@ class DataService:
         rating: int,
         comment: str
     ) -> Dict[str, Any]:
-        parsed_reviewer_id = parse_id(reviewer_id)
-        parsed_match_id = parse_id(match_id)
-        parsed_reviewee_id = parse_id(reviewee_id)
-        if not parsed_reviewer_id or not parsed_match_id or not parsed_reviewee_id:
+        if not reviewer_id or not match_id or not reviewee_id:
             raise ValueError("ID ไม่ถูกต้อง")
             
-        new_review = Review(
-            reviewer_id=parsed_reviewer_id,
-            reviewee_id=parsed_reviewee_id,
-            match_id=parsed_match_id,
-            rating=rating,
-            comment=comment
-        )
-        await new_review.insert()
-        return to_dict(new_review)
+        async with AsyncSessionLocal() as session:
+            new_review = Review(
+                id=str(uuid.uuid4()),
+                reviewer_id=str(reviewer_id),
+                reviewee_id=str(reviewee_id),
+                match_id=str(match_id),
+                rating=rating,
+                comment=comment,
+                created_at=datetime.now(timezone.utc)
+            )
+            session.add(new_review)
+            await session.commit()
+            return to_dict(new_review)
 
     # 💳 6. Payments Services
     @staticmethod
@@ -370,96 +438,126 @@ class DataService:
         payment_method: str,
         slip_url: str
     ) -> Dict[str, Any]:
-        parsed_user_id = parse_id(user_id)
-        parsed_booking_id = parse_id(booking_id)
-        if not parsed_user_id or not parsed_booking_id:
+        if not user_id or not booking_id:
             raise ValueError("ID ไม่ถูกต้อง")
             
-        new_tx = Transaction(
-            user_id=parsed_user_id,
-            booking_id=parsed_booking_id,
-            amount=amount,
-            payment_method=payment_method,
-            slip_url=slip_url,
-            status="processing",
-            verified_at=None
-        )
-        await new_tx.insert()
-        
-        booking = await Booking.get(parsed_booking_id)
-        if booking:
-            booking.payment_id = new_tx.id
-            booking.status = "pending_verification"
-            await booking.save()
+        async with AsyncSessionLocal() as session:
+            new_tx = Transaction(
+                id=str(uuid.uuid4()),
+                user_id=str(user_id),
+                booking_id=str(booking_id),
+                amount=amount,
+                payment_method=payment_method,
+                slip_url=slip_url,
+                status="processing",
+                created_at=datetime.now(timezone.utc),
+                verified_at=None
+            )
+            session.add(new_tx)
             
-        return to_dict(new_tx)
+            # อัปเดตสถานะของ Booking ด้วย
+            booking_stmt = select(Booking).where(Booking.id == str(booking_id))
+            booking_res = await session.execute(booking_stmt)
+            booking = booking_res.scalars().first()
+            if booking:
+                booking.payment_id = new_tx.id
+                booking.status = "pending_verification"
+                
+            await session.commit()
+            return to_dict(new_tx)
 
     @staticmethod
     async def get_pending_transactions() -> List[Dict[str, Any]]:
-        transactions = await Transaction.find(Transaction.status == "processing").to_list()
-        pending = []
-        for tx in transactions:
-            booking = await Booking.get(tx.booking_id)
-            court = await Court.get(booking.court_id) if booking else None
-            user = await User.get(tx.user_id)
+        async with AsyncSessionLocal() as session:
+            stmt = select(Transaction).where(Transaction.status == "processing")
+            res = await session.execute(stmt)
+            transactions = res.scalars().all()
             
-            pending.append({
-                "transaction_id": str(tx.id),
-                "user_id": str(tx.user_id),
-                "username": user.username if user else "Unknown",
-                "booking_id": str(tx.booking_id),
-                "court_name": court.court_name if court else "Unknown Court",
-                "booking_date": booking.booking_date if booking else "",
-                "time_slot": booking.time_slot if booking else "",
-                "amount": tx.amount,
-                "slip_url": tx.slip_url,
-                "status": tx.status,
-                "created_at": tx.created_at
-            })
-        return pending
+            pending = []
+            for tx in transactions:
+                booking_stmt = select(Booking).where(Booking.id == tx.booking_id)
+                booking_res = await session.execute(booking_stmt)
+                booking = booking_res.scalars().first()
+                
+                court = None
+                if booking:
+                    court_stmt = select(Court).where(Court.id == booking.court_id)
+                    court_res = await session.execute(court_stmt)
+                    court = court_res.scalars().first()
+                    
+                user_stmt = select(User).where(User.id == tx.user_id)
+                user_res = await session.execute(user_stmt)
+                user = user_res.scalars().first()
+                
+                pending.append({
+                    "transaction_id": str(tx.id),
+                    "user_id": str(tx.user_id),
+                    "username": user.username if user else "Unknown",
+                    "booking_id": str(tx.booking_id),
+                    "court_name": court.court_name if court else "Unknown Court",
+                    "booking_date": booking.booking_date if booking else "",
+                    "time_slot": booking.time_slot if booking else "",
+                    "amount": tx.amount,
+                    "slip_url": tx.slip_url,
+                    "status": tx.status,
+                    "created_at": tx.created_at
+                })
+            return pending
 
     @staticmethod
     async def get_transaction_by_id(tx_id: str) -> Optional[Dict[str, Any]]:
-        parsed = parse_id(tx_id)
-        if not parsed:
+        if not tx_id:
             return None
-        tx = await Transaction.get(parsed)
-        return to_dict(tx)
+        async with AsyncSessionLocal() as session:
+            stmt = select(Transaction).where(Transaction.id == str(tx_id))
+            res = await session.execute(stmt)
+            tx = res.scalars().first()
+            return to_dict(tx)
 
     @staticmethod
     async def verify_payment(tx_id: str, action: str) -> Optional[Dict[str, Any]]:
-        parsed = parse_id(tx_id)
-        if not parsed:
+        if not tx_id:
             return None
-        tx = await Transaction.get(parsed)
-        if not tx:
-            return None
-            
-        booking = await Booking.get(tx.booking_id)
-        if action == "approve":
-            tx.status = "verified"
-            tx.verified_at = datetime.now(timezone.utc)
-            if booking:
-                booking.status = "confirmed"
-                await booking.save()
-        elif action == "reject":
-            tx.status = "failed"
-            if booking:
-                booking.status = "payment_rejected"
-                await booking.save()
+        async with AsyncSessionLocal() as session:
+            stmt = select(Transaction).where(Transaction.id == str(tx_id))
+            res = await session.execute(stmt)
+            tx = res.scalars().first()
+            if not tx:
+                return None
                 
-        await tx.save()
-        return to_dict(tx)
+            booking_stmt = select(Booking).where(Booking.id == tx.booking_id)
+            booking_res = await session.execute(booking_stmt)
+            booking = booking_res.scalars().first()
+            
+            if action == "approve":
+                tx.status = "verified"
+                tx.verified_at = datetime.now(timezone.utc)
+                if booking:
+                    booking.status = "confirmed"
+            elif action == "reject":
+                tx.status = "failed"
+                if booking:
+                    booking.status = "payment_rejected"
+                    
+            await session.commit()
+            return to_dict(tx)
 
     # 📊 7. Dashboard Stats
     @staticmethod
     async def get_dashboard_stats() -> Dict[str, Any]:
-        user_count = await User.count()
-        court_count = await Court.count()
-        match_count = await Match.find(Match.status == "open").count()
-        return {
-            "total_active_users": user_count,
-            "available_courts_today": court_count,
-            "upcoming_matches_count": match_count,
-            "system_announcement": "ยินดีต้อนรับสู่สนาม Impact Tennis! มีโปรโมชั่นช่วงบ่ายลด 20%"
-        }
+        async with AsyncSessionLocal() as session:
+            user_count_res = await session.execute(select(func.count()).select_from(User))
+            user_count = user_count_res.scalar()
+            
+            court_count_res = await session.execute(select(func.count()).select_from(Court))
+            court_count = court_count_res.scalar()
+            
+            match_count_res = await session.execute(select(func.count()).select_from(Match).where(Match.status == "open"))
+            match_count = match_count_res.scalar()
+            
+            return {
+                "total_active_users": user_count,
+                "available_courts_today": court_count,
+                "upcoming_matches_count": match_count,
+                "system_announcement": "ยินดีต้อนรับสู่สนาม Impact Tennis! มีโปรโมชั่นช่วงบ่ายลด 20%"
+            }
