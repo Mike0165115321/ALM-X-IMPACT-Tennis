@@ -22,6 +22,15 @@ class FindMatchRequest(BaseModel):
 
 @router.post("/find")
 async def find_matching(payload: FindMatchRequest, current_user: Dict[str, Any] = Depends(get_current_user)):
+    user_profile = current_user.get("profile") or {}
+    
+    # 0. Enforce phone verification guard
+    if not user_profile.get("is_phone_verified"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="คุณต้องทำการยืนยันตัวตนผ่านเบอร์โทรศัพท์ (OTP) ก่อนจึงจะสามารถใช้ระบบหาคู่เล่นได้"
+        )
+        
     # 1. ค้นหาผู้เล่นแมตช์ที่เข้าเกณฑ์ตามสไตล์ NTRP และความต้องการ
     compatible_players = await DataService.find_matches(
         court_id=payload.court_id,
@@ -52,8 +61,8 @@ async def find_matching(payload: FindMatchRequest, current_user: Dict[str, Any] 
         "status": new_match["status"],
         "host": {
             "username": current_user["username"],
-            "ntrp": current_user["profile"]["ntrp_rating"],
-            "playing_style": current_user["profile"]["playing_style"]
+            "ntrp": user_profile.get("ntrp_rating", 1.5),
+            "playing_style": user_profile.get("playing_style", "All-Court")
         },
         "compatible_matches": filtered_compatible
     }

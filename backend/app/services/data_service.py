@@ -348,10 +348,11 @@ class DataService:
         preferred_playing_style: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         async with AsyncSessionLocal() as session:
-            # Query users where profile NTRP is between min and max
+            # Query users where profile NTRP is between min and max AND phone must be verified
             stmt = select(User).where(
                 and_(
                     User.role == "player",
+                    User.profile['is_phone_verified'].as_boolean() == True,
                     User.profile['ntrp_rating'].as_float() >= ntrp_min,
                     User.profile['ntrp_rating'].as_float() <= ntrp_max
                 )
@@ -365,10 +366,15 @@ class DataService:
                 if preferred_playing_style and user_style != preferred_playing_style:
                     continue
                     
+                # ดึงข้อมูลโปรไฟล์ทั้งหมดเพื่อส่งกลับ
+                profile_data = user.profile or {}
                 compatible_matches.append({
                     "user_id": str(user.id),
                     "username": user.username,
-                    "ntrp": user.profile.get("ntrp_rating", 1.5)
+                    "ntrp": profile_data.get("ntrp_rating", 1.5),
+                    "playing_style": profile_data.get("playing_style", "All-Court"),
+                    "gender": profile_data.get("gender"),
+                    "display_name": profile_data.get("display_name", user.username)
                 })
             return compatible_matches
 
@@ -403,7 +409,16 @@ class DataService:
             await session.commit()
             return to_dict(new_match)
 
-    # 💬 5. Reviews Services
+    @staticmethod
+    async def get_match_by_id(match_id: str) -> Optional[Dict[str, Any]]:
+        if not match_id:
+            return None
+        async with AsyncSessionLocal() as session:
+            stmt = select(Match).where(Match.id == str(match_id))
+            res = await session.execute(stmt)
+            match_val = res.scalars().first()
+            return to_dict(match_val)
+
     @staticmethod
     async def create_review(
         reviewer_id: str,
@@ -427,6 +442,30 @@ class DataService:
             )
             session.add(new_review)
             await session.commit()
+            
+            # 📊 คำนวณค่าดาวสะสมเฉลี่ย (Average rating) และจำนวนครั้งที่ถูกรีวิว (rating_count)
+            avg_stmt = select(
+                func.avg(Review.rating).label("avg_rating"),
+                func.count(Review.id).label("cnt_rating")
+            ).where(Review.reviewee_id == str(reviewee_id))
+            
+            avg_res = await session.execute(avg_stmt)
+            avg_row = avg_res.first()
+            
+            avg_val = round(float(avg_row.avg_rating), 2) if avg_row and avg_row.avg_rating is not None else 5.0
+            cnt_val = int(avg_row.cnt_rating) if avg_row and avg_row.cnt_rating is not None else 0
+            
+            # อัปเดตข้อมูลย้อนกลับเข้าไปใน Profile ของผู้ถูกรีวิว (Reviewee)
+            user_stmt = select(User).where(User.id == str(reviewee_id))
+            user_res = await session.execute(user_stmt)
+            user = user_res.scalars().first()
+            if user:
+                updated_profile = dict(user.profile or {})
+                updated_profile["rating_average"] = avg_val
+                updated_profile["rating_count"] = cnt_val
+                user.profile = updated_profile
+                await session.commit()
+                
             return to_dict(new_review)
 
     # 💳 6. Payments Services
