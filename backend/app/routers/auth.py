@@ -1,6 +1,7 @@
 import random
 import string
 import logging
+import httpx
 from fastapi import APIRouter, HTTPException, Depends, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, EmailStr, Field
@@ -132,27 +133,96 @@ async def login(payload: LoginRequest):
 
 @router.post("/google")
 async def google_login(payload: GoogleLoginRequest):
-    # ในการทดสอบ Mock เราจะจำลองการถอดรหัส Google Token
-    # หากเป็นโทเค็นจำลอง เราจะสร้าง/ดึงข้อมูลจำลอง
-    email = "google_user@gmail.com"
-    username = "tennis_player_sso"
-    google_id = "google_sso_123456789"
+    from app.config import settings
     
+    # 1. ตรวจสอบระบบ Simulator/Bypass สำหรับการทดสอบ (เช่น Pytest)
+    is_mock = settings.ENABLE_OTP_BYPASS and payload.id_token.startswith("mock_")
+    
+    if is_mock:
+        suffix = payload.id_token[5:] if len(payload.id_token) > 5 else "sso"
+        email = f"google_user_{suffix}@gmail.com"
+        username = f"tennis_player_{suffix}"
+        google_id = f"google_sso_{suffix}"
+        display_name = f"Google SSO Player {suffix}"
+    else:
+        # ยิงตรวจสอบ Google ID Token ผ่าน API ของ Google จริงๆ แบบ Async
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.get(
+                    f"https://oauth2.googleapis.com/tokeninfo?id_token={payload.id_token}",
+                    timeout=10.0
+                )
+            
+            if response.status_code != 200:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="การตรวจสอบโทเค็นของ Google ล้มเหลว หรือโทเค็นหมดอายุ"
+                )
+            
+            idinfo = response.json()
+            email = idinfo.get("email")
+            google_id = idinfo.get("sub")
+            display_name = idinfo.get("name", "Google User")
+            
+            if not email or not google_id:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="ข้อมูล Payload ของ Google ไม่สมบูรณ์"
+                )
+            
+            # ตรวจสอบ Client ID เพื่อความปลอดภัย (หากมีการตั้งค่าไว้ใน .env)
+            if settings.GOOGLE_CLIENT_ID:
+                aud = idinfo.get("aud")
+                if aud != settings.GOOGLE_CLIENT_ID:
+                    logger.warning(f"Audience mismatch: expected {settings.GOOGLE_CLIENT_ID}, got {aud}")
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="ข้อมูล Client ID ของผู้รับไม่ตรงกับระบบ"
+                    )
+            
+            username = email.split("@")[0]
+            
+        except httpx.RequestError as exc:
+            logger.error(f"ไม่สามารถเชื่อมต่อไปยังบริการ Google API ได้: {exc}")
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="ไม่สามารถติดต่อระบบลงทะเบียนของ Google ได้ในขณะนี้"
+            )
+        except Exception as exc:
+            if isinstance(exc, HTTPException):
+                raise exc
+            logger.error(f"เกิดข้อผิดพลาดในการตรวจสอบ Google SSO: {exc}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Google ID Token ไม่ถูกต้อง: {str(exc)}"
+            )
+
+    # 2. ตรวจสอบการผูกบัญชีในระบบ
     user = await DataService.get_user_by_google_id(google_id)
+    
     if not user:
-        user = await DataService.create_user(
-            username=username,
-            email=email,
-            google_id=google_id,
-            role="player",
-            profile={
-                "display_name": "Google SSO Player",
-                "phone": "0968013963",
-                "is_phone_verified": False,
-                "ntrp_rating": 2.5
-            }
-        )
-        
+        # ค้นหาโดยใช้อีเมลเพื่อดูว่าผู้ใช้เคยสมัครด้วย Email/Password ไว้แล้วหรือไม่
+        existing_user = await DataService.get_user_by_email(email)
+        if existing_user:
+            # ทำการเชื่อมบัญชี (Account Merging) ผูก Google ID ให้ทันที
+            user = await DataService.link_google_id(existing_user["id"], google_id)
+            logger.info(f"🔗 เชื่อมโยงบัญชี Google SSO ให้กับอีเมลที่มีอยู่เดิม: {email}")
+        else:
+            # สมัครสมาชิกให้ใหม่โดยอัตโนมัติ
+            user = await DataService.create_user(
+                username=username,
+                email=email,
+                google_id=google_id,
+                role="player",
+                profile={
+                    "display_name": display_name,
+                    "phone": "",
+                    "is_phone_verified": False,
+                    "ntrp_rating": 2.5  # ตั้งระดับฝีมือเริ่มต้นแบบสมเหตุสมผล
+                }
+            )
+            logger.info(f"🌱 ลงทะเบียนผู้ใช้ใหม่ผ่าน Google SSO สำเร็จ: {email}")
+            
     access_token = create_access_token(data={"sub": user["id"], "role": user["role"]})
     return {
         "access_token": access_token,

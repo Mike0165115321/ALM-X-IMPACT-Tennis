@@ -2,7 +2,7 @@
 
 > [!IMPORTANT]
 > **CRITICAL RULE FOR AGENTS / DEVELOPERS:**
-> ทุกครั้งที่เริ่มต้นทำงาน ให้เปิดอ่านและตรวจสอบเอกสาร [ALM X IMPACT Tennis.md](file:///c:/GitHub/ALM-X-IMPACT-Tennis/docs/ALM%20X%20IMPACT%20Tennis.md) เป็นหลักเสมอ เพื่อยึดมั่นขอบเขตและข้อตกลงในการส่งมอบงาน 100% ห้ามรื้อตรรกะระบบที่ตกลงกันไว้โดยไม่จำเป็น
+> ทุกครั้งที่เริ่มต้นทำงาน ให้เปิดอ่านและตรวจสอบเอกสารดัชนีหลัก **[README.md](file:///c:/GitHub/ALM-X-IMPACT-Tennis/docs/README.md)** และเอกสารข้อตกลงบริการ **[ALM X IMPACT Tennis.md](file:///c:/GitHub/ALM-X-IMPACT-Tennis/docs/ALM%20X%20IMPACT%20Tennis.md)** ในโฟลเดอร์ `docs` ก่อนเสมอ เพื่อยึดมั่นขอบเขตสัญญาส่งมอบ 100% และเข้าใจสารบัญการจัดเก็บเอกสารอย่างถูกต้อง
 
 This document ensures that the project team and stakeholders share a unified understanding of the data flow and relationship between the frontend (Wix.com) and the backend (Python FastAPI).
 

@@ -55,7 +55,8 @@ def test_full_player_workflow(client):
     
     # 3. 📅 GET /courts with randomized booking date to prevent 409 slot conflict across test runs
     random_day = random.randint(10, 28)
-    booking_date = f"2026-06-{random_day}"
+    random_year = random.randint(2027, 2035)
+    booking_date = f"{random_year}-06-{random_day}"
     
     courts_response = client.get(f"/api/v1/courts?date={booking_date}")
     assert courts_response.status_code == 200

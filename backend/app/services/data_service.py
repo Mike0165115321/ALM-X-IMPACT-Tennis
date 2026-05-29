@@ -56,6 +56,18 @@ class DataService:
         return to_dict(user)
 
     @staticmethod
+    async def link_google_id(user_id: str, google_id: str) -> Optional[Dict[str, Any]]:
+        parsed = parse_id(user_id)
+        if not parsed:
+            return None
+        user = await User.get(parsed)
+        if not user:
+            return None
+        user.google_id = google_id
+        await user.save()
+        return to_dict(user)
+
+    @staticmethod
     async def create_user(
         username: str,
         email: str,

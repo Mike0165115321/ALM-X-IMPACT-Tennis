@@ -147,7 +147,8 @@ def test_upload_invalid_slip_file_type(client):
     
     # ดึงคอร์ทมาจองจริงเพื่อทำการผ่าน booking guard (M6)
     random_day = random.randint(10, 28)
-    booking_date = f"2026-06-{random_day}"
+    random_year = random.randint(2027, 2035)
+    booking_date = f"{random_year}-06-{random_day}"
     
     courts_res = client.get(f"/api/v1/courts?date={booking_date}")
     court_id = courts_res.json()[0]["id"]
