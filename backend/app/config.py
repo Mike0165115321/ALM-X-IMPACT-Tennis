@@ -29,6 +29,13 @@ class Settings:
     # Google SSO Settings
     GOOGLE_CLIENT_ID: str = os.getenv("GOOGLE_CLIENT_ID", "")
 
+    # SMTP Settings (Hotmail/Outlook)
+    SMTP_HOST: str = os.getenv("SMTP_HOST", "smtp-mail.outlook.com")
+    SMTP_PORT: int = int(os.getenv("SMTP_PORT", "587"))
+    SMTP_USERNAME: str = os.getenv("SMTP_USERNAME", "")
+    SMTP_PASSWORD: str = os.getenv("SMTP_PASSWORD", "")
+    SMTP_FROM_NAME: str = os.getenv("SMTP_FROM_NAME", "IMPACT Tennis Club")
+
     def __init__(self):
         # หาก URL การเชื่อมต่อระบุเป็น postgresql:// (sync) ให้สลับเป็น postgresql+asyncpg:// (async) อัตโนมัติเพื่อใช้ร่วมกับ SQLAlchemy Async
         if self.SUPABASE_DB_URL.startswith("postgresql://"):
