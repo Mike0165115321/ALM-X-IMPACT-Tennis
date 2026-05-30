@@ -62,13 +62,26 @@ def test_full_player_workflow(client):
     assert courts_response.status_code == 200
     courts_data = courts_response.json()
     assert len(courts_data) >= 2
-    court_1_id = courts_data[0]["id"]
+    
+    # Find a court and slot that is not booked
+    court_1_id = None
+    time_slot = None
+    for court in courts_data:
+        free_slot = next((s for s in court.get("available_slots", []) if not s.get("is_booked")), None)
+        if free_slot:
+            court_1_id = court["id"]
+            time_slot = free_slot["time_slot"]
+            break
+            
+    if not court_1_id:
+        court_1_id = courts_data[0]["id"]
+        time_slot = "16:00-17:00"
     
     # 4. 📅 POST /queues/book
     booking_payload = {
         "court_id": court_1_id,
         "booking_date": booking_date,
-        "time_slot": "16:00-17:00"
+        "time_slot": time_slot
     }
     book_response = client.post("/api/v1/queues/book", json=booking_payload, headers=headers)
     assert book_response.status_code == 201

@@ -34,10 +34,13 @@ def test_coach_booking_flow(client):
     coaches = coaches_response.json()
     assert len(coaches) >= 2
     
-    # Select first coach and first slot
+    # Select first coach and an available slot
     coach = coaches[0]
     coach_id = coach["id"]
-    time_slot = coach["available_slots"][0]["time_slot"]
+    free_slot = next((s for s in coach.get("available_slots", []) if not s.get("is_booked")), None)
+    if not free_slot:
+        free_slot = coach["available_slots"][0]
+    time_slot = free_slot["time_slot"]
     booking_date = "2026-06-20"
     
     # 3. Book coach
