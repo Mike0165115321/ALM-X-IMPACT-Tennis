@@ -55,7 +55,7 @@ Clear boundaries prevent overlap and confusion between the frontend team (Wix.co
     *   **Booking Creation & Verification:** จองคอร์ท เลือกเวลา และส่งสลิปชำระเงินแบบโอนธนาคาร (Manual Verify)
     *   **SMS OTP Verification:** ยืนยันตัวตนผ่านเบอร์มือถือเพื่อป้องกันการจองสแปม
 *   **ระบบจับคู่ผู้เล่น (Player Matchmaking - NTRP & UGC):**
-    *   **Google OAuth SSO:** ล็อกอินและสมัครผ่าน Google Account เพื่อสร้างประวัติผู้เล่นสากล
+    *   **Hotmail Authentication:** ล็อกอินและสมัครด้วยอีเมล (Hotmail/Outlook) เพื่อสร้างประวัติผู้เล่น
     *   **NTRP Matchmaking Algorithm:** สร้าง/ค้นหาห้องจับคู่เล่นเทนนิส คัดกรองตามระดับฝีมือ NTRP 1.5 - 7.0
     *   **Post-Match User Reviews (UGC Loop):** การให้ดาวและรีวิวประเมินผู้เล่น เพื่อสะสมและแสดงเรตติ้งในสังคมผู้ใช้
 
@@ -80,8 +80,7 @@ Clear boundaries prevent overlap and confusion between the frontend team (Wix.co
 ### 📡 Active API Endpoints for Wix Integration
 
 #### 🔐 Authentication & Verification System (Phase 1)
-*   `POST /api/v1/auth/login` (Standard Email/Password authentication)
-*   `POST /api/v1/auth/google` (Google SSO authentication - *Phase 1*)
+*   `POST /api/v1/auth/login` (Standard Email/Password authentication - รองรับบัญชี Hotmail)
 *   `POST /api/v1/auth/otp/send` (Triggers SMS gateway OTP generation - *Phase 1*)
 *   `POST /api/v1/auth/otp/verify` (Validates OTP to confirm and unlock phone number - *Phase 1*)
 
@@ -104,6 +103,6 @@ Clear boundaries prevent overlap and confusion between the frontend team (Wix.co
 
 Once API integration tests with Wix are complete, transitioning to the production environment requires:
 1.  **✅ Supabase Cloud Connection:** เชื่อมต่อฐานข้อมูล Supabase Cloud PostgreSQL ของทางบริษัทเรียบร้อยแล้ว (ผ่าน SQLAlchemy + asyncpg)
-2.  **Google SSO Credentials:** Configure production credentials via the Google Cloud Console (*Phase 1*).
+2.  **Microsoft/Hotmail SMTP Credentials:** ตั้งค่าอีเมลบริษัทสำหรับส่งแจ้งเตือนการทำรายการอัตโนมัติ (*Phase 1*).
 3.  **SMS Gateway Credentials:** Link actual API keys with a Thailand-based SMS gateway for real OTP distribution (*Phase 1*).
 4.  **Auto Slip Verification:** Integrate a banking OCR/API to scan slip QR codes for automated court booking approvals (*Phase 1*).

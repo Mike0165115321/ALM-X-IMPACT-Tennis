@@ -44,7 +44,6 @@ class User(Base):
     username = Column(String, nullable=False)
     email = Column(String, unique=True, nullable=False, index=True)
     password_hash = Column(String, nullable=True)
-    google_id = Column(String, nullable=True)
     role = Column(String, default="player")
     profile = Column(JSON, nullable=False, default=dict)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))

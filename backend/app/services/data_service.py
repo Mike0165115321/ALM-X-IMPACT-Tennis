@@ -52,35 +52,10 @@ class DataService:
             return to_dict(user)
 
     @staticmethod
-    async def get_user_by_google_id(google_id: str) -> Optional[Dict[str, Any]]:
-        if not google_id:
-            return None
-        async with AsyncSessionLocal() as session:
-            stmt = select(User).where(User.google_id == google_id)
-            res = await session.execute(stmt)
-            user = res.scalars().first()
-            return to_dict(user)
-
-    @staticmethod
-    async def link_google_id(user_id: str, google_id: str) -> Optional[Dict[str, Any]]:
-        if not user_id:
-            return None
-        async with AsyncSessionLocal() as session:
-            stmt = select(User).where(User.id == str(user_id))
-            res = await session.execute(stmt)
-            user = res.scalars().first()
-            if not user:
-                return None
-            user.google_id = google_id
-            await session.commit()
-            return to_dict(user)
-
-    @staticmethod
     async def create_user(
         username: str,
         email: str,
         password_hash: Optional[str] = None,
-        google_id: Optional[str] = None,
         role: str = "player",
         profile: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
@@ -105,7 +80,6 @@ class DataService:
                 username=username,
                 email=email.lower().strip(),
                 password_hash=password_hash,
-                google_id=google_id,
                 role=role,
                 profile=default_profile,
                 created_at=datetime.now(timezone.utc)

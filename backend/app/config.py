@@ -26,9 +26,6 @@ class Settings:
     SMS_SENDER_NAME: str = os.getenv("SMS_SENDER_NAME", "SMS")
     SMS_OTP_API_URL: str = os.getenv("SMS_OTP_API_URL", "https://otp.thaibulksms.com/v1/otp")
 
-    # Google SSO Settings
-    GOOGLE_CLIENT_ID: str = os.getenv("GOOGLE_CLIENT_ID", "")
-
     # SMTP Settings (Hotmail/Outlook)
     SMTP_HOST: str = os.getenv("SMTP_HOST", "smtp-mail.outlook.com")
     SMTP_PORT: int = int(os.getenv("SMTP_PORT", "587"))

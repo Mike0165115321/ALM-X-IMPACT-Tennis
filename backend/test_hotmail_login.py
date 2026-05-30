@@ -49,6 +49,7 @@ def test_hotmail_register_and_login():
     async def cleanup():
         from app.services.data_service import AsyncSessionLocal
         from app.models import User
+        # pyrefly: ignore [missing-import]
         from sqlalchemy import delete
         
         async with AsyncSessionLocal() as session:

@@ -144,11 +144,11 @@
 
 ---
 
-### 1.8 ระบบล็อกอินด้วย Google (Google SSO)
+### 1.8 ระบบอีเมลแจ้งเตือนอัตโนมัติ (Microsoft/Hotmail SMTP)
 
 | # | รายการ | สถานะ | ไฟล์ที่เกี่ยวข้อง | รายละเอียด |
 |---|--------|--------|-------------------|------------|
-| 1 | Endpoint `POST /api/v1/auth/google` | ✅ | `routers/auth.py` | พัฒนาตรรกะ Verify ID Token กับ Google API จริง, รองรับ Account Merging และ Auto-Register สมบูรณ์ |
+| 1 | สร้าง `EmailService` ส่งอีเมลผ่าน `smtp-mail.outlook.com` | ✅ | `services/email_service.py` | พัฒนาตรรกะส่งอีเมลแจ้งเตือนอัตโนมัติแบบ Asynchronous ด้วย `asyncio.to_thread` |
 
 ---
 
