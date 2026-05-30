@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from pydantic import BaseModel
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from datetime import datetime
 
 from app.services.data_service import DataService
@@ -16,6 +16,7 @@ class BookRequest(BaseModel):
     court_id: str
     booking_date: str  # YYYY-MM-DD
     time_slot: str     # เช่น "18:00-20:00"
+    promo_code: Optional[str] = None # รหัสคูปองส่วนลดสะสม (ถ้ามี)
 
 # ----------------- Route Endpoints -----------------
 
@@ -64,20 +65,52 @@ async def book_court(
     if await DataService.has_user_booked_slot(current_user["id"], payload.booking_date, payload.time_slot):
         raise UserDuplicateBookingException()
         
-    booking = await DataService.create_booking(
-        user_id=current_user["id"],
-        court_id=payload.court_id,
-        booking_date=payload.booking_date,
-        time_slot=payload.time_slot
-    )
-    
     # 5. ดึงข้อมูลอัตราค่าบริการของสนามและประมวลผลราคาพิเศษตามระดับสมาชิก
     court = await DataService.get_court_by_id(payload.court_id)
     base_price = court.get("price_per_hour", 500.0) if court else 500.0
     discounted_price = await DataService.get_discounted_price_for_user(current_user["id"], base_price)
     
-    # 6. ส่งอีเมลสรุปข้อมูลการจองและแจ้งยอดโอนชำระเงิน
+    # 6. ตรวจสอบรหัสส่วนลดคูปองเพิ่มเติม (Voucher Redeem)
+    promo_discount = 0.0
+    applied_code = None
+    if payload.promo_code:
+        try:
+            applied_code = payload.promo_code.upper().strip()
+            promo_discount = await DataService.validate_and_apply_voucher(
+                current_user["id"],
+                applied_code,
+                discounted_price
+            )
+        except ValueError as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(e)
+            )
+            
+    fee_to_pay = max(0.0, discounted_price - promo_discount)
+
+    # 7. สร้างรายการจองสนามพร้อมแนบรายละเอียดส่วนลดคูปอง
+    booking = await DataService.create_booking(
+        user_id=current_user["id"],
+        court_id=payload.court_id,
+        booking_date=payload.booking_date,
+        time_slot=payload.time_slot,
+        applied_voucher_code=applied_code,
+        discount_amount=promo_discount
+    )
+    
+    # 8. ส่งอีเมลสรุปข้อมูลการจองและแจ้งยอดโอนชำระเงิน
     court_name = court.get("court_name", "Court Room") if court else "Impact Tennis Court"
+    
+    voucher_row = ""
+    if promo_discount > 0.0:
+        voucher_row = f"""
+          <tr style="background-color: #e6fffa; color: #0d9488;">
+            <td style="padding: 8px; border: 1px solid #cbd5e0; font-weight: bold;">ส่วนลดคูปอง ({applied_code})</td>
+            <td style="padding: 8px; border: 1px solid #cbd5e0; font-weight: bold;">- {promo_discount} บาท</td>
+          </tr>
+        """
+        
     payment_html = f"""
     <html>
       <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
@@ -105,13 +138,18 @@ async def book_court(
             <td style="padding: 8px; border: 1px solid #cbd5e0;">ราคาส่วนลดของคุณ ({current_user['profile'].get('member_tier', 'Standard')})</td>
             <td style="padding: 8px; border: 1px solid #cbd5e0;">{discounted_price} บาท</td>
           </tr>
+          {voucher_row}
+          <tr style="background-color: #edf2f7; font-weight: bold; color: #1a202c; font-size: 1.1em;">
+            <td style="padding: 8px; border: 1px solid #cbd5e0;">ยอดโอนชำระเงินสุทธิ</td>
+            <td style="padding: 8px; border: 1px solid #cbd5e0; font-weight: bold; color: #e53e3e;">{fee_to_pay} บาท</td>
+          </tr>
         </table>
         
         <div style="background-color: #fffaf0; border-left: 4px solid #dd6b20; padding: 15px; margin: 15px 0;">
           <h4 style="margin: 0 0 8px 0; color: #dd6b20;">📌 ขั้นตอนการโอนเงินเพื่อยืนยันสิทธิ์จองคอร์ท:</h4>
-          <p style="margin: 0;">กรุณาโอนเงินจำนวน <b>{discounted_price} บาท</b> ไปยังธนาคารกสิกรไทย (KBANK)<br/>
+          <p style="margin: 0;">กรุณาโอนเงินจำนวน <b>{fee_to_pay} บาท</b> ไปยังธนาคารกสิกรไทย (KBANK)<br/>
           เลขที่บัญชี: <b>999-9-99999-9</b> (ชื่อบัญชี: บจก. เคเอฟยู)<br/>
-          เมื่อโอนเสร็จแล้ว รบกวนนำสลิปไปอัปโหลดส่งที่ระบบหน้าเว็บ Wix เพื่อยืนยันสิทธิ์ทันทีครับ!</p>
+          เมื่อโอนเสร็จแล้ว รบอนุมัติแนบหลักฐานสลิปโอนเงินผ่านระบบหน้าเว็บเพื่อยืนยันสิทธิ์ทันทีครับ!</p>
         </div>
         <p>ขอบคุณที่ใช้บริการ,<br/><b>ทีมงาน ALMxIMPACT Tennis Club</b></p>
       </body>
@@ -129,8 +167,11 @@ async def book_court(
         "booking_id": booking["id"],
         "status": booking["status"],
         "base_price": base_price,
-        "fee_to_pay": discounted_price,
-        "member_tier": current_user["profile"].get("member_tier", "Standard")
+        "member_price": discounted_price,
+        "promo_discount": promo_discount,
+        "fee_to_pay": fee_to_pay,
+        "member_tier": current_user["profile"].get("member_tier", "Standard"),
+        "applied_promo_code": applied_code
     }
 
 @router.patch("/{booking_id}/cancel")

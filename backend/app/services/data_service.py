@@ -10,7 +10,7 @@ from sqlalchemy import select, func, update, and_, or_
 # pyrefly: ignore [missing-import]
 from sqlalchemy.pool import NullPool
 from app.config import settings
-from app.models import User, Court, Booking, Match, Review, Transaction, Coach, CoachBooking, Merchandise, Order
+from app.models import User, Court, Booking, Match, Review, Transaction, Coach, CoachBooking, Merchandise, Order, Voucher, UserVoucher
 from app.services.otp_store import otp_store
 
 logger = logging.getLogger("data_service")
@@ -26,7 +26,8 @@ def to_dict(doc: Any) -> Optional[Dict[str, Any]]:
     for col in doc.__class__.__table__.columns:
         res[col.name] = getattr(doc, col.name)
     # รับประกันว่า id จะเป็น String แน่ๆ เผื่อกรณี UUID หรือ Types อื่นๆ
-    res["id"] = str(doc.id)
+    if hasattr(doc, "id"):
+        res["id"] = str(doc.id)
     return res
 
 class DataService:
@@ -372,7 +373,14 @@ class DataService:
             return booking is not None
 
     @staticmethod
-    async def create_booking(user_id: str, court_id: str, booking_date: str, time_slot: str) -> Dict[str, Any]:
+    async def create_booking(
+        user_id: str,
+        court_id: str,
+        booking_date: str,
+        time_slot: str,
+        applied_voucher_code: Optional[str] = None,
+        discount_amount: float = 0.0
+    ) -> Dict[str, Any]:
         if not user_id or not court_id:
             raise ValueError("ID ไม่ถูกต้อง")
             
@@ -385,9 +393,30 @@ class DataService:
                 time_slot=time_slot,
                 status="pending_payment",
                 payment_id=None,
+                applied_voucher_code=applied_voucher_code,
+                discount_amount=discount_amount,
                 created_at=datetime.now(timezone.utc)
             )
             session.add(new_booking)
+            
+            if applied_voucher_code:
+                # 1. บันทึกการใช้งานคูปองลง UserVoucher
+                user_voucher = UserVoucher(
+                    id=str(uuid.uuid4()),
+                    user_id=str(user_id),
+                    voucher_code=str(applied_voucher_code),
+                    booking_id=new_booking.id,
+                    used_at=datetime.now(timezone.utc)
+                )
+                session.add(user_voucher)
+                
+                # 2. เพิ่มจำนวนครั้งที่ใช้ใน Voucher
+                v_stmt = select(Voucher).where(Voucher.code == str(applied_voucher_code))
+                v_res = await session.execute(v_stmt)
+                db_voucher = v_res.scalars().first()
+                if db_voucher:
+                    db_voucher.used_count += 1
+            
             await session.commit()
             return to_dict(new_booking)
 
@@ -893,3 +922,109 @@ class DataService:
             stmt = select(Order).order_by(Order.created_at.desc())
             res = await session.execute(stmt)
             return [to_dict(o) for o in res.scalars().all()]
+
+    # 🎟️ 9. Voucher & Promo Code Services (Phase 3)
+    @staticmethod
+    async def create_voucher(
+        code: str,
+        discount_type: str,
+        discount_value: float,
+        min_booking_amount: float = 0.0,
+        max_discount: Optional[float] = None,
+        expiry_date: Optional[str] = None,
+        max_uses: int = 100,
+        is_active: bool = True
+    ) -> Dict[str, Any]:
+        async with AsyncSessionLocal() as session:
+            # ลบตัวเก่าก่อนถ้ามีรหัสซ้ำ เพื่อให้เทสรันซ้ำได้สะดวก
+            stmt_del = select(Voucher).where(Voucher.code == str(code).upper().strip())
+            res_del = await session.execute(stmt_del)
+            old_voucher = res_del.scalars().first()
+            if old_voucher:
+                await session.delete(old_voucher)
+                await session.commit()
+
+        async with AsyncSessionLocal() as session:
+            voucher = Voucher(
+                code=str(code).upper().strip(),
+                discount_type=discount_type,
+                discount_value=discount_value,
+                min_booking_amount=min_booking_amount,
+                max_discount=max_discount,
+                expiry_date=expiry_date,
+                max_uses=max_uses,
+                used_count=0,
+                is_active=is_active,
+                created_at=datetime.now(timezone.utc)
+            )
+            session.add(voucher)
+            await session.commit()
+            return to_dict(voucher)
+
+    @staticmethod
+    async def get_voucher(code: str) -> Optional[Dict[str, Any]]:
+        if not code:
+            return None
+        async with AsyncSessionLocal() as session:
+            stmt = select(Voucher).where(Voucher.code == str(code).upper().strip())
+            res = await session.execute(stmt)
+            return to_dict(res.scalars().first())
+
+    @staticmethod
+    async def validate_and_apply_voucher(user_id: str, code: str, booking_amount: float) -> float:
+        """
+        ตรวจเช็คความถูกต้องของคูปอง และคำนวณมูลค่าส่วนลดที่จะได้รับจริง
+        หากไม่ผ่านเงื่อนไขใดๆ จะยกกำลังขึ้นเป็น ValueError
+        """
+        if not code:
+            return 0.0
+            
+        async with AsyncSessionLocal() as session:
+            # 1. ค้นหาคูปอง
+            v_stmt = select(Voucher).where(Voucher.code == str(code).upper().strip())
+            v_res = await session.execute(v_stmt)
+            voucher = v_res.scalars().first()
+            if not voucher:
+                raise ValueError("ขออภัย ไม่พบรหัสส่วนลด/คูปองนี้ในระบบ")
+                
+            # 2. ตรวจสอบสถานะการเปิดใช้งาน
+            if not voucher.is_active:
+                raise ValueError("ขออภัย คูปองนี้ถูกปิดใช้งานชั่วคราวแล้ว")
+                
+            # 3. ตรวจสอบวันหมดอายุ (Expiry Date)
+            if voucher.expiry_date:
+                today = datetime.now().strftime("%Y-%m-%d")
+                if today > voucher.expiry_date:
+                    raise ValueError(f"ขออภัย คูปองนี้หมดอายุการใช้งานแล้วเมื่อ {voucher.expiry_date}")
+                    
+            # 4. ตรวจสอบจำนวนสิทธิ์รวมที่จำกัด (Quota Limit)
+            if voucher.used_count >= voucher.max_uses:
+                raise ValueError("ขออภัย สิทธิ์ในการใช้งานคูปองนี้เต็มเรียบร้อยแล้ว")
+                
+            # 5. ตรวจสอบเงื่อนไขยอดจองขั้นต่ำ
+            if booking_amount < voucher.min_booking_amount:
+                raise ValueError(f"ยอดจองของคุณ ({booking_amount} บาท) ยังไม่ถึงยอดขั้นต่ำที่คูปองระบุ ({voucher.min_booking_amount} บาท)")
+                
+            # 6. ตรวจสอบการใช้งานซ้ำของตัวผู้ใช้เอง (One-time limit per user)
+            uv_stmt = select(UserVoucher).where(
+                and_(
+                    UserVoucher.user_id == str(user_id),
+                    UserVoucher.voucher_code == voucher.code
+                )
+            )
+            uv_res = await session.execute(uv_stmt)
+            if uv_res.scalars().first() is not None:
+                raise ValueError("ขออภัย คุณเคยใช้งานรหัสส่วนลดพิเศษนี้ไปแล้ว (จำกัด 1 สิทธิ์ต่อผู้ใช้)")
+                
+            # 7. คำนวณส่วนลดตามประเภท
+            discount = 0.0
+            if voucher.discount_type == "fixed":
+                discount = voucher.discount_value
+            elif voucher.discount_type == "percentage":
+                discount = booking_amount * (voucher.discount_value / 100.0)
+                if voucher.max_discount is not None:
+                    discount = min(discount, voucher.max_discount)
+                    
+            # ยอดส่วนลดต้องไม่เกินยอดรวมที่จะต้องจ่ายจริง
+            discount = min(discount, booking_amount)
+            return round(discount, 2)

@@ -33,13 +33,15 @@ def test_store_and_rental_flow(client):
     items = store_response.json()
     assert len(items) >= 3
     
-    # Find Water and Racket rental IDs
+    # Find Water and Racket rental IDs and save initial water stock
     water_id = None
     racket_id = None
+    water_initial_stock = 0
     
     for item in items:
         if "Water" in item["item_name"]:
             water_id = item["id"]
+            water_initial_stock = item["stock_quantity"]
         elif "Racket" in item["item_name"]:
             racket_id = item["id"]
             
@@ -67,8 +69,8 @@ def test_store_and_rental_flow(client):
     
     for item in items_after:
         if item["id"] == water_id:
-            # should have decremented from 200 to 197
-            assert item["stock_quantity"] == 197
+            # should have decremented by 3
+            assert item["stock_quantity"] == water_initial_stock - 3
             
     # 5. List user orders
     print("[TEST] 4. Listing user's order history...")

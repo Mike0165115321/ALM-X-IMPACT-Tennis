@@ -67,6 +67,8 @@ class Booking(Base):
     time_slot = Column(String, nullable=False, index=True)
     status = Column(String, default="pending")
     payment_id = Column(String, nullable=True)
+    applied_voucher_code = Column(String, nullable=True) # รหัสคูปองส่วนลดที่นำมาใช้
+    discount_amount = Column(Float, default=0.0) # จำนวนเงินที่ลดไปจากคูปอง
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
 class Match(Base):
@@ -152,3 +154,27 @@ class Order(Base):
     status = Column(String, default="pending_payment")
     payment_id = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+class Voucher(Base):
+    __tablename__ = "alm_vouchers"
+
+    code = Column(String, primary_key=True) #WELCOME50, ALM20
+    discount_type = Column(String, nullable=False) #fixed, percentage
+    discount_value = Column(Float, nullable=False)
+    min_booking_amount = Column(Float, default=0.0)
+    max_discount = Column(Float, nullable=True)
+    expiry_date = Column(String, nullable=True) #YYYY-MM-DD
+    max_uses = Column(Integer, default=100)
+    used_count = Column(Integer, default=0)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+class UserVoucher(Base):
+    __tablename__ = "alm_user_vouchers"
+    __table_args__ = (UniqueConstraint("user_id", "voucher_code", name="uq_user_voucher"),)
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String, nullable=False, index=True)
+    voucher_code = Column(String, nullable=False, index=True)
+    booking_id = Column(String, nullable=True)
+    used_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))

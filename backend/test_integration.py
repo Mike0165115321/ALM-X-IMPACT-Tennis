@@ -119,3 +119,19 @@ def test_full_player_workflow(client):
     my_bookings = client.get("/api/v1/queues", headers=headers)
     assert my_bookings.status_code == 200
     assert any(b["booking_id"] == booking_id and b["status"] == "confirmed" for b in my_bookings.json())
+
+    # Cleanup DB to keep Supabase clean
+    import asyncio
+    async def cleanup():
+        from app.services.data_service import AsyncSessionLocal
+        from app.models import User, Booking, Transaction
+        # pyrefly: ignore [missing-import]
+        from sqlalchemy import delete
+        
+        async with AsyncSessionLocal() as session:
+            await session.execute(delete(Transaction).where(Transaction.id == tx_id))
+            await session.execute(delete(Booking).where(Booking.id == booking_id))
+            await session.execute(delete(User).where(User.id == data["user"]["id"]))
+            await session.commit()
+            
+    asyncio.run(cleanup())
