@@ -65,6 +65,8 @@
 | `SMS_API_SECRET` | App Secret ประจำแอป OTP จาก ThaiBulkSMS | `b60f404535a699f6866a46dd83975865` |
 | `SMS_SENDER_NAME` | ชื่อผู้ส่งที่จะปรากฏบนมือถือของผู้ใช้ | `OTP_SMS` (ผู้ส่งเริ่มต้นทดสอบฟรี) |
 | `SMS_OTP_API_URL` | โฮสต์เชื่อมต่อระบบ OTP ของผู้บริการ | `https://otp.thaibulksms.com/v1/otp` |
+| `EASYSLIP_API_KEY` | คีย์ความปลอดภัยสำหรับเชื่อมต่อระบบเช็กสลิปอัตโนมัติ EasySlip API v2 | `4e10d271-2189-4289-bb14-513c384d9a8e` |
+
 
 ---
 
@@ -119,3 +121,51 @@
 3.  แก้ไขฟังก์ชัน `upload_slip(slip_file, booking_id, request)` ให้ทำหน้าที่เปลี่ยนจากการเขียนไฟล์ลงเครื่อง (`open(file, "wb")`) ไปเป็น **`storage_client.upload_from_file(...)`** และส่ง URL จริงของ Cloud Storage กลับไปแทน
 4.  *ผลลัพธ์:* โค้ดในฝั่งของ API / Routers และ `main.py` จะยังคงทำงานได้ปกติโดยไม่มีการแก้ไขแม้แต่บรรทัดเดียว!
 
+---
+
+## 💸 6. ระบบตรวจสอบสลิปโอนเงินอัตโนมัติ (EasySlip API v2)
+
+ระบบหลังบ้านใช้ **EasySlip API v2** สำหรับการตรวจสอบความถูกต้องของสลิปโอนเงินเพื่อยืนยันรายการจองสนามแบบทันที (Instant Confirmation) โดยไม่ต้องรอให้แอดมินมาอนุมัติแบบแมนนวล
+
+### ⚙️ สถาปัตยกรรมและการถอดรหัส Mini-QR:
+1. **การอ่านรหัสภาพ (`QRDecoder`):** ควบคุมผ่านคลาส [qr_decoder.py](file:///c:/GitHub/ALM-X-IMPACT-Tennis/backend/app/services/qr_decoder.py) โดยใช้โมดูล `pyzbar` ถอดรหัส Mini-QR payload ที่ซ่อนอยู่บนรูปภาพสลิปที่ผู้ใช้อัปโหลด
+2. **การเรียกใช้ API (`EasySlipService`):** ควบคุมผ่านคลาส [easyslip_service.py](file:///c:/GitHub/ALM-X-IMPACT-Tennis/backend/app/services/easyslip_service.py) ทำการส่งคำขอแบบ Async ไปยัง Endpoint `https://api.easyslip.com/v2/verify/bank` ด้วยเมธอด `POST`
+3. **การอนุมัติการจองอัตโนมัติ (Auto-Approve):** ใน `upload_payment_slip` ของ [payments.py](file:///c:/GitHub/ALM-X-IMPACT-Tennis/backend/app/routers/payments.py) หากตรวจจับรหัส QR ได้สำเร็จและข้อมูลยอดเงินโอนจากธนาคารตรงกับราคาสุทธิที่สนามกำหนด (`isAmountMatched = True`) ระบบจะเรียกฟังก์ชัน `DataService.verify_payment(tx_id, "approve")` เพื่ออัปเกรดสถานะธุรกรรมเป็น `verified` และยืนยันสถานะการจองคิวสนามเป็น `confirmed` โดยทันที
+
+### 📡 รายละเอียด API Endpoint ของ EasySlip:
+*   **API URL ปลายทาง:** `https://api.easyslip.com/v2/verify/bank`
+*   **Request Method:** `POST`
+*   **Headers:**
+    *   `Authorization: Bearer <EASYSLIP_API_KEY>`
+    *   `Content-Type: application/json`
+*   **Request Body JSON:**
+    ```json
+    {
+      "payload": "0046000600000101030250225AP...",
+      "matchAmount": 2569.0
+    }
+    ```
+*   **Response (200 OK):**
+    ```json
+    {
+      "success": true,
+      "data": {
+        "amountInSlip": 2569.0,
+        "isAmountMatched": true,
+        "transRef": "20260527093446PAOTAHX8YH5102TH",
+        "sender": {
+          "displayName": "นาย สมชาย ใจดี"
+        },
+        "receiver": {
+          "displayName": "บริษัท เอแอลเอ็ม เทนนิส จำกัด"
+        }
+      }
+    }
+    ```
+
+### 🛠️ เครื่องมือทดสอบสลิปจริง (Developer CLI Tester):
+ผู้ดูแลระบบหรือนักพัฒนาสามารถป้อนไฟล์สลิปจริงเข้าไปเช็กผลตอบกลับและตรวจสอบการทำงานของ EasySlip API แบบ Real-time ได้ผ่านเครื่องมือ [verify_real_slip.py](file:///c:/GitHub/ALM-X-IMPACT-Tennis/backend/verify_real_slip.py) ด้วยคำสั่ง:
+```powershell
+.\venv\Scripts\python.exe verify_real_slip.py <ชื่อไฟล์ภาพสลิปในโฟลเดอร์ backend> <ยอดเงินที่ต้องการตรวจจับ>
+# ตัวอย่าง: .\venv\Scripts\python.exe verify_real_slip.py real_slip.png 2569.0
+```
