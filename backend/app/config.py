@@ -33,6 +33,9 @@ class Settings:
     SMTP_PASSWORD: str = os.getenv("SMTP_PASSWORD", "")
     SMTP_FROM_NAME: str = os.getenv("SMTP_FROM_NAME", "IMPACT Tennis Club")
 
+    # 💳 EasySlip Integration Key
+    EASYSLIP_API_KEY: str = os.getenv("EASYSLIP_API_KEY", "")
+
     def __init__(self):
         # หาก URL การเชื่อมต่อระบุเป็น postgresql:// (sync) ให้สลับเป็น postgresql+asyncpg:// (async) อัตโนมัติเพื่อใช้ร่วมกับ SQLAlchemy Async
         if self.SUPABASE_DB_URL.startswith("postgresql://"):

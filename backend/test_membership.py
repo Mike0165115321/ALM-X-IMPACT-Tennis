@@ -106,9 +106,10 @@ def test_membership_tier_promotion_flow(client):
     court_id = courts_res.json()[0]["id"]
     base_price = courts_res.json()[0]["price_per_hour"]
     
-    random_day = random.randint(10, 28)
-    random_year = random.randint(2027, 2035)
-    booking_date = f"{random_year}-06-{random_day}"
+    # ใช้วัน/ปีที่แตกต่างกันอย่างสิ้นเชิงเพื่อป้องกันการชนกัน (Conflict 409) บน Supabase Cloud
+    random_day = random.randint(1, 28)
+    random_year = random.randint(2040, 2050)
+    booking_date = f"{random_year}-07-{random_day}"
     
     book_silver = client.post(
         "/api/v1/queues/book",
@@ -126,7 +127,7 @@ def test_membership_tier_promotion_flow(client):
         
     asyncio.run(force_gold_upgrade())
     
-    booking_date_gold = f"{random_year}-06-{random_day + 1 if random_day < 28 else random_day - 1}"
+    booking_date_gold = f"{random_year}-07-{random_day + 1 if random_day < 28 else random_day - 1}"
     book_gold = client.post(
         "/api/v1/queues/book",
         json={"court_id": court_id, "booking_date": booking_date_gold, "time_slot": "10:00-11:00"},
