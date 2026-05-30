@@ -1,12 +1,13 @@
 import random
 import string
 import logging
-from fastapi import APIRouter, HTTPException, Depends, status
+from fastapi import APIRouter, HTTPException, Depends, status, BackgroundTasks
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, EmailStr, Field
 from typing import Optional, Dict, Any
 
 from app.services.data_service import DataService
+from app.services.email_service import EmailService
 from app.utils import create_access_token, verify_password, decode_access_token, hash_password
 
 router = APIRouter(prefix="/api/v1/auth", tags=["Authentication"])
@@ -61,7 +62,7 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
 # ----------------- Route Endpoints -----------------
 
 @router.post("/register", status_code=status.HTTP_201_CREATED)
-async def register(payload: RegisterRequest):
+async def register(payload: RegisterRequest, background_tasks: BackgroundTasks):
     # ตรวจสอบอีเมลซ้ำ
     existing_user = await DataService.get_user_by_email(payload.email)
     if existing_user:
@@ -83,6 +84,25 @@ async def register(payload: RegisterRequest):
             "phone": payload.phone,
             "is_phone_verified": False
         }
+    )
+    
+    # ส่งอีเมลต้อนรับผู้สมัครสมาชิกใหม่
+    welcome_html = f"""
+    <html>
+      <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+        <h2 style="color: #2b6cb0;">ยินดีต้อนรับคุณ {payload.username} เข้าสู่ ALMxIMPACT Tennis! 🎾</h2>
+        <p>บัญชีผู้ใช้ของคุณได้รับการลงทะเบียนเรียบร้อยแล้วด้วยอีเมล: <b>{payload.email}</b></p>
+        <p>กรุณายืนยันเบอร์โทรศัพท์มือถือผ่านรหัส OTP เพื่อเริ่มต้นจองสนามและหาคู่ตีเทนนิสระดับเดียวกัน!</p>
+        <br/>
+        <p>ขอให้สนุกกับการเล่นเทนนิส,<br/><b>ทีมงาน ALMxIMPACT Tennis Club</b></p>
+      </body>
+    </html>
+    """
+    background_tasks.add_task(
+        EmailService.send_email,
+        payload.email,
+        "ยินดีต้อนรับเข้าสู่ ALMxIMPACT Tennis! 🎾",
+        welcome_html
     )
     
     # สร้าง JWT Token

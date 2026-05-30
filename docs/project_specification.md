@@ -127,8 +127,7 @@ ALM-X-IMPACT-Tennis/ (Root)
 id             TEXT PRIMARY KEY,  -- UUID
 username       TEXT NOT NULL,
 email          TEXT UNIQUE NOT NULL,
-password_hash  TEXT,               -- ค่าว่างได้หากสมัครผ่าน Google Auth
-google_id      TEXT,               -- เก็บ ID จาก Google SSO
+password_hash  TEXT NOT NULL,
 role           TEXT DEFAULT 'player',  -- "player", "admin", "court_owner"
 profile        JSONB NOT NULL,     -- เก็บข้อมูลโปรไฟล์ยืดหยุ่นแบบ JSON
 -- profile JSONB ประกอบด้วย:
@@ -223,29 +222,6 @@ verified_at     TIMESTAMPTZ
     {
       "email": "user@example.com",
       "password": "securepassword123"
-    }
-    ```
-
-#### `POST /api/v1/auth/google`
-*   **คำอธิบาย:** สำหรับการเข้าสู่ระบบด้วย Google Account (SSO)
-*   **Request Body:**
-    ```json
-    {
-      "id_token": "google_oauth_jwt_token_string"
-    }
-    ```
-*   **Response (200 OK):**
-    ```json
-    {
-      "access_token": "jwt_token_here",
-      "token_type": "bearer",
-      "user": {
-        "id": "60d5ec4b2f8fb8123456789a",
-        "username": "tennis_player_sso",
-        "email": "user@gmail.com",
-        "role": "player",
-        "is_phone_verified": false
-      }
     }
     ```
 

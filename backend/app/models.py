@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from typing import List, Optional
 from pydantic import BaseModel, Field
 # pyrefly: ignore [missing-import]
-from sqlalchemy import Column, String, Float, Integer, DateTime, JSON, UniqueConstraint
+from sqlalchemy import Column, String, Float, Integer, DateTime, JSON, UniqueConstraint, Boolean
 # pyrefly: ignore [missing-import]
 from sqlalchemy.orm import declarative_base
 
@@ -107,3 +107,48 @@ class Transaction(Base):
     status = Column(String, default="pending", index=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     verified_at = Column(DateTime(timezone=True), nullable=True)
+
+class Coach(Base):
+    __tablename__ = "alm_coaches"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    name = Column(String, nullable=False)
+    price_per_hour = Column(Float, nullable=False)
+    specialties = Column(JSON, nullable=False, default=list)
+    rating = Column(Float, default=5.0)
+    experience_years = Column(Integer, default=0)
+    available_slots = Column(JSON, nullable=False, default=list)
+
+class CoachBooking(Base):
+    __tablename__ = "alm_coach_bookings"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String, nullable=False, index=True)
+    coach_id = Column(String, nullable=False, index=True)
+    booking_date = Column(String, nullable=False, index=True)
+    time_slot = Column(String, nullable=False, index=True)
+    status = Column(String, default="pending_payment")
+    payment_id = Column(String, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+class Merchandise(Base):
+    __tablename__ = "alm_merchandise"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    item_name = Column(String, nullable=False)
+    category = Column(String, nullable=False) # drink, ball, racket_rental
+    price = Column(Float, nullable=False)
+    stock_quantity = Column(Integer, default=100)
+    is_rental = Column(Boolean, default=False)
+
+class Order(Base):
+    __tablename__ = "alm_orders"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String, nullable=False, index=True)
+    court_booking_id = Column(String, nullable=True)
+    items = Column(JSON, nullable=False, default=list)
+    total_price = Column(Float, nullable=False)
+    status = Column(String, default="pending_payment")
+    payment_id = Column(String, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))

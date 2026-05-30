@@ -10,7 +10,7 @@ from sqlalchemy import select, func, update, and_, or_
 # pyrefly: ignore [missing-import]
 from sqlalchemy.pool import NullPool
 from app.config import settings
-from app.models import User, Court, Booking, Match, Review, Transaction
+from app.models import User, Court, Booking, Match, Review, Transaction, Coach, CoachBooking, Merchandise, Order
 from app.services.otp_store import otp_store
 
 logger = logging.getLogger("data_service")
@@ -669,3 +669,227 @@ class DataService:
                 "upcoming_matches_count": match_count,
                 "system_announcement": "ยินดีต้อนรับสู่สนาม Impact Tennis! มีโปรโมชั่นช่วงบ่ายลด 20%"
             }
+
+    # 🥈 8. Coach Services (Phase 2)
+    @staticmethod
+    async def get_all_coaches() -> List[Dict[str, Any]]:
+        async with AsyncSessionLocal() as session:
+            stmt = select(Coach)
+            res = await session.execute(stmt)
+            coaches = res.scalars().all()
+            
+            # หากไม่มีข้อมูลโค้ชในระบบเลย ให้ทำ Auto-seeding ทันที
+            if not coaches:
+                default_coaches = [
+                    Coach(
+                        id="coach-1",
+                        name="Coach Top (Pro Player)",
+                        price_per_hour=800.0,
+                        specialties=["Advanced", "Spin Serve", "Tactics"],
+                        rating=4.9,
+                        experience_years=8,
+                        available_slots=[
+                            {"time_slot": "09:00-10:00", "is_booked": False},
+                            {"time_slot": "10:00-11:00", "is_booked": False},
+                            {"time_slot": "16:00-17:00", "is_booked": False},
+                            {"time_slot": "17:00-18:00", "is_booked": False}
+                        ]
+                    ),
+                    Coach(
+                        id="coach-2",
+                        name="Coach Benz (Junior Specialist)",
+                        price_per_hour=600.0,
+                        specialties=["Beginners", "Kids", "Basic Strokes"],
+                        rating=4.8,
+                        experience_years=5,
+                        available_slots=[
+                            {"time_slot": "09:00-10:00", "is_booked": False},
+                            {"time_slot": "10:00-11:00", "is_booked": False},
+                            {"time_slot": "13:00-14:00", "is_booked": False},
+                            {"time_slot": "14:00-15:00", "is_booked": False}
+                        ]
+                    )
+                ]
+                for c in default_coaches:
+                    session.add(c)
+                await session.commit()
+                coaches = default_coaches
+                
+            return [to_dict(c) for c in coaches]
+
+    @staticmethod
+    async def get_coach_by_id(coach_id: str) -> Optional[Dict[str, Any]]:
+        async with AsyncSessionLocal() as session:
+            stmt = select(Coach).where(Coach.id == str(coach_id))
+            res = await session.execute(stmt)
+            return to_dict(res.scalars().first())
+
+    @staticmethod
+    async def is_coach_slot_booked(coach_id: str, booking_date: str, time_slot: str) -> bool:
+        async with AsyncSessionLocal() as session:
+            stmt = select(CoachBooking).where(
+                and_(
+                    CoachBooking.coach_id == str(coach_id),
+                    CoachBooking.booking_date == str(booking_date),
+                    CoachBooking.time_slot == str(time_slot),
+                    CoachBooking.status != "cancelled"
+                )
+            )
+            res = await session.execute(stmt)
+            return res.scalars().first() is not None
+
+    @staticmethod
+    async def create_coach_booking(
+        user_id: str,
+        coach_id: str,
+        booking_date: str,
+        time_slot: str
+    ) -> Dict[str, Any]:
+        async with AsyncSessionLocal() as session:
+            # 1. ค้นหาโค้ช
+            stmt = select(Coach).where(Coach.id == str(coach_id))
+            res = await session.execute(stmt)
+            coach = res.scalars().first()
+            if not coach:
+                raise ValueError("Coach not found")
+
+            # 2. ทำรายการจองโค้ช
+            booking = CoachBooking(
+                id=str(uuid.uuid4()),
+                user_id=str(user_id),
+                coach_id=str(coach_id),
+                booking_date=str(booking_date),
+                time_slot=str(time_slot),
+                status="pending_payment"
+            )
+            session.add(booking)
+            
+            # 3. อัปเดตสล็อตเวลาในตารางของโค้ชให้เป็น True
+            slots = list(coach.available_slots)
+            for s in slots:
+                if s["time_slot"] == time_slot:
+                    s["is_booked"] = True
+            
+            # ใช้ flag modified เพื่อบอกให้ SQLAlchemy บันทึกการเปลี่ยนแปลง JSON column
+            from sqlalchemy.orm.attributes import flag_modified
+            coach.available_slots = slots
+            flag_modified(coach, "available_slots")
+            
+            await session.commit()
+            return to_dict(booking)
+
+    @staticmethod
+    async def get_coach_bookings_by_user(user_id: str) -> List[Dict[str, Any]]:
+        async with AsyncSessionLocal() as session:
+            stmt = select(CoachBooking).where(CoachBooking.user_id == str(user_id)).order_by(CoachBooking.created_at.desc())
+            res = await session.execute(stmt)
+            return [to_dict(b) for b in res.scalars().all()]
+
+    # 🛍️ 9. Merchandise & Storefront Services (Phase 3)
+    @staticmethod
+    async def get_store_items() -> List[Dict[str, Any]]:
+        async with AsyncSessionLocal() as session:
+            stmt = select(Merchandise)
+            res = await session.execute(stmt)
+            items = res.scalars().all()
+            
+            # หากไม่มีสินค้าในระบบเลย ให้ทำ Auto-seeding
+            if not items:
+                default_items = [
+                    Merchandise(
+                        id="item-1",
+                        item_name="ALM Premium Water (500ml)",
+                        category="drink",
+                        price=15.0,
+                        stock_quantity=200,
+                        is_rental=False
+                    ),
+                    Merchandise(
+                        id="item-2",
+                        item_name="Wilson US Open Tennis Balls (Can of 3)",
+                        category="ball",
+                        price=220.0,
+                        stock_quantity=50,
+                        is_rental=False
+                    ),
+                    Merchandise(
+                        id="item-3",
+                        item_name="Babolat Pure Aero Racket (Rental)",
+                        category="racket_rental",
+                        price=100.0,
+                        stock_quantity=10,
+                        is_rental=True
+                    )
+                ]
+                for item in default_items:
+                    session.add(item)
+                await session.commit()
+                items = default_items
+                
+            return [to_dict(i) for i in items]
+
+    @staticmethod
+    async def create_order(
+        user_id: str,
+        items: List[Dict[str, Any]],
+        court_booking_id: Optional[str] = None
+    ) -> Dict[str, Any]:
+        async with AsyncSessionLocal() as session:
+            total_price = 0.0
+            processed_items = []
+            
+            for order_item in items:
+                item_id = order_item["item_id"]
+                qty = order_item["quantity"]
+                
+                # ค้นหาสินค้าจริง
+                item_stmt = select(Merchandise).where(Merchandise.id == str(item_id))
+                item_res = await session.execute(item_stmt)
+                db_item = item_res.scalars().first()
+                if not db_item:
+                    raise ValueError(f"Item {item_id} not found")
+                
+                if db_item.stock_quantity < qty:
+                    raise ValueError(f"สินค้า {db_item.item_name} มีสต็อกคงเหลือไม่พอ (คงเหลือ {db_item.stock_quantity} ชิ้น)")
+                
+                # หักสต็อก
+                db_item.stock_quantity -= qty
+                
+                subtotal = db_item.price * qty
+                total_price += subtotal
+                
+                processed_items.append({
+                    "item_id": db_item.id,
+                    "item_name": db_item.item_name,
+                    "quantity": qty,
+                    "price_per_unit": db_item.price,
+                    "subtotal": subtotal,
+                    "is_rental": db_item.is_rental
+                })
+            
+            # บันทึกคำสั่งซื้อ
+            order = Order(
+                id=str(uuid.uuid4()),
+                user_id=str(user_id),
+                court_booking_id=court_booking_id,
+                items=processed_items,
+                total_price=total_price,
+                status="pending_payment"
+            )
+            session.add(order)
+            await session.commit()
+            return to_dict(order)
+
+    @staticmethod
+    async def get_orders_by_user(user_id: str) -> List[Dict[str, Any]]:
+        async with AsyncSessionLocal() as session:
+            stmt = select(Order).where(Order.user_id == str(user_id)).order_by(Order.created_at.desc())
+            res = await session.execute(stmt)
+            return [to_dict(o) for o in res.scalars().all()]
+
+    @staticmethod
+    async def get_all_orders() -> List[Dict[str, Any]]:
+        async with AsyncSessionLocal() as session:
+            stmt = select(Order).order_by(Order.created_at.desc())
+            res = await session.execute(stmt)
+            return [to_dict(o) for o in res.scalars().all()]

@@ -23,7 +23,7 @@ setup_logging()
 logger = logging.getLogger("backend")
 
 # นำเข้า Routers ทั้งหมด
-from app.routers import auth, queues, matching, reviews, payments, courts, admin
+from app.routers import auth, queues, matching, reviews, payments, courts, admin, coaches, store
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -66,6 +66,8 @@ app.include_router(reviews.router)
 app.include_router(payments.router)
 app.include_router(courts.router)
 app.include_router(admin.router)
+app.include_router(coaches.router)
+app.include_router(store.router)
 
 # 🛠️ Global Exception Handler สำหรับ ALMException
 @app.exception_handler(ALMException)

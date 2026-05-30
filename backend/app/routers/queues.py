@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from pydantic import BaseModel
 from typing import List, Dict, Any
 from datetime import datetime
 
 from app.services.data_service import DataService
+from app.services.email_service import EmailService
 from app.routers.auth import get_current_user
 from app.exceptions import SlotConflictException, UserDuplicateBookingException
 
@@ -27,7 +28,11 @@ async def get_queues(current_user: Dict[str, Any] = Depends(get_current_user)):
         return await DataService.get_bookings_by_user(current_user["id"])
 
 @router.post("/book", status_code=status.HTTP_201_CREATED)
-async def book_court(payload: BookRequest, current_user: Dict[str, Any] = Depends(get_current_user)):
+async def book_court(
+    payload: BookRequest,
+    background_tasks: BackgroundTasks,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
     # ตรวจสอบเบอร์โทรศัพท์ว่าทำการยืนยันตัวตน OTP หรือยัง ตามความปลอดภัย
     if not current_user["profile"]["is_phone_verified"]:
         raise HTTPException(
@@ -70,6 +75,54 @@ async def book_court(payload: BookRequest, current_user: Dict[str, Any] = Depend
     court = await DataService.get_court_by_id(payload.court_id)
     base_price = court.get("price_per_hour", 500.0) if court else 500.0
     discounted_price = await DataService.get_discounted_price_for_user(current_user["id"], base_price)
+    
+    # 6. ส่งอีเมลสรุปข้อมูลการจองและแจ้งยอดโอนชำระเงิน
+    court_name = court.get("court_name", "Court Room") if court else "Impact Tennis Court"
+    payment_html = f"""
+    <html>
+      <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+        <h2 style="color: #2b6cb0;">ใบแจ้งสรุปการจองสนามเทนนิส 🎾 (รอกระบวนการโอนชำระเงิน)</h2>
+        <p>สวัสดีคุณ {current_user['username']},</p>
+        <p>เราได้รับคำขอจองคิวสนามของคุณเรียบร้อยแล้ว โดยมีรายละเอียดดังนี้:</p>
+        <table style="border-collapse: collapse; width: 100%; margin: 15px 0;">
+          <tr style="background-color: #f7fafc;">
+            <td style="padding: 8px; border: 1px solid #e2e8f0; font-weight: bold;">สนาม</td>
+            <td style="padding: 8px; border: 1px solid #e2e8f0;">{court_name}</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px; border: 1px solid #e2e8f0; font-weight: bold;">วันที่จอง</td>
+            <td style="padding: 8px; border: 1px solid #e2e8f0;">{payload.booking_date}</td>
+          </tr>
+          <tr style="background-color: #f7fafc;">
+            <td style="padding: 8px; border: 1px solid #e2e8f0; font-weight: bold;">ช่วงเวลา</td>
+            <td style="padding: 8px; border: 1px solid #e2e8f0;">{payload.time_slot}</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px; border: 1px solid #e2e8f0; font-weight: bold;">ค่าสนามปกติ</td>
+            <td style="padding: 8px; border: 1px solid #e2e8f0;">{base_price} บาท</td>
+          </tr>
+          <tr style="background-color: #edf2f7; font-weight: bold; color: #2d3748;">
+            <td style="padding: 8px; border: 1px solid #cbd5e0;">ราคาส่วนลดของคุณ ({current_user['profile'].get('member_tier', 'Standard')})</td>
+            <td style="padding: 8px; border: 1px solid #cbd5e0;">{discounted_price} บาท</td>
+          </tr>
+        </table>
+        
+        <div style="background-color: #fffaf0; border-left: 4px solid #dd6b20; padding: 15px; margin: 15px 0;">
+          <h4 style="margin: 0 0 8px 0; color: #dd6b20;">📌 ขั้นตอนการโอนเงินเพื่อยืนยันสิทธิ์จองคอร์ท:</h4>
+          <p style="margin: 0;">กรุณาโอนเงินจำนวน <b>{discounted_price} บาท</b> ไปยังธนาคารกสิกรไทย (KBANK)<br/>
+          เลขที่บัญชี: <b>999-9-99999-9</b> (ชื่อบัญชี: บจก. เคเอฟยู)<br/>
+          เมื่อโอนเสร็จแล้ว รบกวนนำสลิปไปอัปโหลดส่งที่ระบบหน้าเว็บ Wix เพื่อยืนยันสิทธิ์ทันทีครับ!</p>
+        </div>
+        <p>ขอบคุณที่ใช้บริการ,<br/><b>ทีมงาน ALMxIMPACT Tennis Club</b></p>
+      </body>
+    </html>
+    """
+    background_tasks.add_task(
+        EmailService.send_email,
+        current_user["email"],
+        "ใบสรุปยอดโอนเงินค่าจองคอร์ทเทนนิส ALMxIMPACT 🎾",
+        payment_html
+    )
     
     return {
         "message": "Booking request created successfully",
